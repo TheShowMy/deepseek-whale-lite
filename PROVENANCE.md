@@ -1,35 +1,44 @@
-# 素材来源与许可范围（PROVENANCE）
+# 来源与许可范围
 
-本仓库的**代码**按 MIT 许可（见 [`LICENSE`](LICENSE)）。`assets/` 目录下的**美术素材**（图片 / 动图 / 音效）**不在 MIT 覆盖范围内**，按下面的说明「原样提供」。
+## 代码与上游
 
-## 一、许可范围
+代码、构建产物及配置按 MIT 分发，保留 `LICENSE` 中 MeteorNOX 的版权声明。上游为 MeteorNOX/DeepSeek-Balance-Whale-Widget，基准分支 `main`，提交 `fce34e3abd1fe8b616e287b9864305c7f0be81a0`（0.3.18）。代码实现已用 TypeScript 重写。
 
-| 范围 | 许可 |
-|---|---|
-| `lib/`、`cordis.patch.yml`、`package.json`、文档与维护脚本 | **MIT**（见 `LICENSE`） |
-| `assets/**`（图片 / 动图 / 音效） | **不适用 MIT**：由维护者提供或使用 AI 工具生成，按 **as-is** 随插件分发，仅用于运行本插件；不授予再许可，也不声明为原创作品。 |
+上游原有图片、动图和音频不受其 MIT 覆盖，未保留在本分支／npm 包中。Git 历史保留，仅删除当前版本资源。
 
-这样划分的原因：代码可以明确授权，而美术素材的来源与权利状态往往无法百分之百举证 —— 与其给一个站不住的授权，不如如实标注范围，并承诺收到权利主张就处理（见第四节）。
+## 新生成角色图
 
-## 二、逐项来源
+七张 PNG 于 2026-10-10 使用内置 image_gen 生成。统一采用粗线条、平涂的 Q 版半身风格；精确提示词记录在 `docs/image-prompts.json`。参考原图不纳入仓库或 npm 包。
 
-| 文件 | 来源 / 说明 |
-|---|---|
-| `DSniang1.png`（鲸鱼本体，气泡由代码绘制） | **AI 工具生成**的图像，经人工挑选与裁切。生成工具与原始出处**已不可考**（文件内元数据已被剥离，见第三节）。 |
-| `DSniang02.png` | 同上（备用整图，兼容旧版手动安装路径）。 |
-| `DSH2.png`（README 顶部展示图） | 由维护者自行设计与排版（使用在线设计工具），2026-09 替换为清理版（已剥离全部内嵌元数据）。 |
-| `rua.gif`、`bubble-petpet.gif` | 内置动图素材。 |
-| `bubble-money1.gif` | 内置泡泡图（余额预警默认内容的配图）。 |
-| `Ya1.mp3` / `Ya2.mp3`、`D1.mp3` / `D2.mp3` | 内置音效（按压 / 松开）。 |
-| `minecraft-exp-orb.wav`、`task-end-a.wav` | 内置任务结束音（Minecraft·经验球 / 预设 A）。 |
+| 文件 | 外观来源 |
+| --- | --- |
+| `assets/characters/deepseek-smile.png` | 用户提供的蓝发女仆外观参考及简笔 Q 版风格参考；AI 重新绘制 |
+| `assets/characters/deepseek-focus.png` | 微笑版本的专注表情／配饰变体 |
+| `assets/characters/deepseek-sleepy.png` | 微笑版本的困困表情／配饰变体 |
+| `assets/characters/lumine.png` | 《原神》荧的公开形象；AI 同人重新绘制 |
+| `assets/characters/vesna.png` | 薇斯纳官方公开形象；AI 同人重新绘制 |
+| `assets/characters/vodyanitsa.png` | 沃雅妮莎官方公开形象；AI 同人重新绘制 |
+| `assets/characters/tsaritsa.png` | 冰之女皇官方公开形象；AI 同人重新绘制 |
 
-## 三、元数据清理
+这些图片**不适用代码的 MIT 或音效的 CC0**。DeepSeek 拟人角色参考图的原始作者及许可未由用户提供，不将该参考宣称为本项目原创设计。原神角色及相关设计权利归 HoYoverse／COGNOSPHERE 等原权利人；仅作为非官方、非商业同人插件素材提供。AI 重绘和不盈利不等于取得角色权利的再许可。
 
-图片素材曾内嵌过设计工具的 XMP 归属信息（工具名、模板名、账号 id，甚至第三方品牌名）。自 **0.3.1** 起，随包 PNG **一律剥离** `eXIf` / `iTXt` / `tEXt` / `zTXt` 元数据块，只保留渲染必需的 `IHDR` / `sRGB` / `gAMA` / `pHYs` / `IDAT` / `IEND`。
+公开角色参考：
 
-- 复核：解析每个 PNG 的块序列，确认不再有文本 / EXIF 块；
-- 剥离：逐块重写，不触碰像素数据（IHDR/IDAT/IEND 原样保留），因此画面完全不变。
+- 薇斯纳：[HoYoWiki](https://wiki.hoyolab.com/m/genshin/entry/11661?lang=zh-tw)、[官方角色公告](https://genshin.hoyoverse.com/ja/news/detail/165002)。
+- 沃雅妮莎：[HoYoWiki](https://wiki.hoyolab.com/m/genshin/entry/11702?lang=zh-cn)、HoYoLAB 官方 PV 角色介绍图（2026-06-26，图片含 COGNOSPHERE 标记）。
+- 冰之女皇：[官方公开形象](https://genshin.hoyoverse.com/ja/news/detail/165003)。
 
-## 四、权利主张 / Takedown
+如有素材权利问题，请通过仓库 issue 提供文件名与依据，以便核实并移除或替换。
 
-如果你认为 `assets/` 中有素材侵犯了你的权利，请在本仓库开一条 issue，说明**文件名**与**依据**，我们会在核实后**立即替换或移除**，不附加其它条件。我们也欢迎直接提供可自由再分发的替代素材。
+## 音效
+
+四个 OGG 均来自 [Kenney RPG Audio](https://kenney.nl/assets/rpg-audio)，未提取或仿制原神音频。使用原始文件，未转码；原许可全文随包保存于 `assets/sounds/LICENSE-Kenney.txt`（仅规范换行及空白）。
+
+| 包内名称 | Kenney 原文件 | 用途 | 许可 |
+| --- | --- | --- | --- |
+| `press.ogg` | `Audio/cloth1.ogg` | 按下角色 | CC0 |
+| `release.ogg` | `Audio/cloth2.ogg` | 松开角色 | CC0 |
+| `complete.ogg` | `Audio/handleCoins.ogg` | 对话完成 | CC0 |
+| `alert.ogg` | `Audio/metalClick.ogg` | 低余额提醒 | CC0 |
+
+下载来源：`https://kenney.nl/media/pages/assets/rpg-audio/8e99002d76-1677590336/kenney_rpg-audio.zip`。核验日期 2026-10-10。CC0 不覆盖原神角色或其他第三方权利。

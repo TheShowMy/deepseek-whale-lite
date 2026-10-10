@@ -1,0 +1,73 @@
+{
+  "tool": "built-in image_gen",
+  "date": "2026-10-10",
+  "style": "User-selected chunky-outline, flat-cel chibi half-body portraits",
+  "referencePolicy": "References were used only for appearance/style and are not redistributed. Character art is outside the code MIT license.",
+  "images": [
+    {
+      "id": "deepseek-smile",
+      "file": "assets/characters/deepseek-smile.png",
+      "prompt": "Use case: stylized-concept. Make ONE transparent PNG desktop mascot HALF-BODY portrait, waist-up. Image 1 is ONLY a STYLE reference: match its extremely simple chibi cartoon with very thick dark brown outline, huge round dark eyes with a single white oval highlight, huge rounded head, tiny open smiling mouth, flat colors and one hard-edged cel shadow, hand-drawn meme/sticker charm. DO NOT copy Image 1's gray-haired character or background. Image 2 is the CHARACTER APPEARANCE reference: simplify her long blue hair, whale-tail teal hair clip, blue-and-white frilled maid headband and blue white maid uniform into the very simple cartoon style of Image 1. New pose front facing, happy smile, both little hands visible holding one tiny blue whale plush near chest. Half body only, no legs. Centered square canvas, 10% padding, completely transparent RGBA background with NO scenery, no glow, no gradient, no shadow or backdrop, no lettering, no watermark. This is DeepSeek fan mascot version 微笑. Keep extremely simple and readable at 160px, not detailed anime rendering.",
+      "references": [
+        "User-supplied chibi style reference",
+        "User-supplied blue-haired maid appearance reference"
+      ]
+    },
+    {
+      "id": "deepseek-focus",
+      "file": "assets/characters/deepseek-focus.png",
+      "prompt": "Edit the reference PNG into a second expression variant of exactly the SAME chibi blue-haired DeepSeek maid mascot. Keep the thick dark-brown rounded outlines, enormous simple dark eyes, flat cel colors, blue-and-white maid headband, teal whale-tail hair clip, long blue hair, body size and waist-up framing identical. Change expression to focused and cute: small round navy glasses over the big eyes, mouth a little determined curved line, holding a tiny dark blue laptop with a simple whale silhouette instead of holding the whale plush. Transparent RGBA background, no text, no backdrop, no glow, no realistic shading, half-body only. Do not introduce a different character or detailed anime facial rendering. Small desktop sticker version 专注.",
+      "references": [
+        "User-supplied chibi style reference",
+        "User-supplied blue-haired maid appearance reference",
+        "deepseek-smile generated portrait"
+      ]
+    },
+    {
+      "id": "deepseek-sleepy",
+      "file": "assets/characters/deepseek-sleepy.png",
+      "prompt": "Edit the reference PNG into third expression variant of exactly SAME blue-haired DeepSeek maid chibi mascot. Keep identity, long blue hair, white frilled maid headband, teal whale-tail hair clip, blue white uniform, very thick dark-brown outline, flat cel colors, huge rounded head and waist-up framing identical. Make her adorably sleepy: closed curved eyelids, a tiny yawn, one hand rubbing an eye and the other hugging the same little whale plush. Tiny blue sleeping cap can be placed over one side of the headband, optional but retain maid headband. No words, no Z letters, no realistic shading, no gradients. Genuine transparent RGBA background, no room, no glow, half-body only, clear simple sticker silhouette at 160px.",
+      "references": [
+        "User-supplied chibi style reference",
+        "User-supplied blue-haired maid appearance reference",
+        "deepseek-smile generated portrait"
+      ]
+    },
+    {
+      "id": "lumine",
+      "file": "assets/characters/lumine.png",
+      "prompt": "Generate a NEW character portrait, not a blue-haired maid. Reference image is STYLE ONLY: copy its chunky dark-brown rounded outline, huge simple dark round eyes with one oval white highlight, large round chibi head and flat cel colors. Subject is Lumine (荧), the female Traveler from Genshin Impact: short pale-blonde bob hair with asymmetric fringe, small white flower hair ornaments, white sleeveless dress with gold and light-blue accents and pale blue shoulder scarf. Cute cheerful mouth, front facing, waist-up HALF-BODY portrait only, hands holding a tiny golden star. Same chibi sticker simplification and silhouette size as the style reference. Square canvas with transparent RGBA background and 8% padding. No legs, no scenery, no glow, no realistic rendering, no text, no logo or watermark. This is unofficial fan art.",
+      "references": [
+        "deepseek-smile as style only",
+        "Public Genshin Lumine appearance"
+      ]
+    },
+    {
+      "id": "vesna",
+      "file": "assets/characters/vesna.png",
+      "prompt": "Generate a NEW chibi HALF-BODY portrait of Vesna / 薇斯纳 from Genshin. Image 1 is STYLE ONLY: match its thick dark-brown rounded cartoon outline, enormous simple dark oval eyes with one white highlight, round head, tiny cheerful mouth, simple flat cel colors. Do not use the blue-haired maid identity. Image 2 is Vesna's official APPEARANCE reference: keep the pale-blonde long swept hair, pointy elf ears, light teal/white military-style uniform, dark-blue fur-trim cape shoulders, gold chest trim and little silver teal diadem with ribbon. Simplify all details strongly into the sticker style of Image 1. Front-facing, waist-up only, friendly confident smile, one hand making a tiny salute. Square transparent RGBA PNG, 8% padding. No legs, no soldiers or scenery, no weapon crossing the canvas, no text, no logos, no backdrop or gradient glow. Unofficial fan art.",
+      "references": [
+        "deepseek-smile as style only",
+        "https://genshin.hoyoverse.com/ja/news/detail/165002"
+      ]
+    },
+    {
+      "id": "vodyanitsa",
+      "file": "assets/characters/vodyanitsa.png",
+      "prompt": "Generate a NEW waist-up chibi portrait of Vodyanitsa / 沃雅妮莎 from Genshin. Image 1 is STYLE ONLY: very thick dark-brown rounded cartoon outline, enormous simple dark eyes each with one white oval highlight, huge round head, small cute mouth, flat colors and hard-edge cel shadows. Do not copy the blue maid identity. Image 2 is the official CHARACTER APPEARANCE: long dark teal wavy hair with a side fringe partly covering one eye, strings of pale pearls and a pale lavender/blue fin-like hair ornament, aqua diamond jewelry, pale lavender opera costume and gloves. Preserve those recognizable details in strongly simplified form. Front-facing half-body only, serene little smile, one hand holding a small oval hand mirror and the other beside her face. Same rounded sticker proportions as Image 1. Square transparent RGBA background, 8% padding. No scenery, no logo, no text, no glow or gradient backdrop, no detailed anime rendering, no legs. Unofficial fan art.",
+      "references": [
+        "deepseek-smile as style only",
+        "https://wiki.hoyolab.com/m/genshin/entry/11702?lang=zh-cn"
+      ]
+    },
+    {
+      "id": "tsaritsa",
+      "file": "assets/characters/tsaritsa.png",
+      "prompt": "Generate NEW waist-up chibi portrait of the Tsaritsa / 冰之女皇 from Genshin. Image 1 is STYLE ONLY: thick dark-brown round cartoon outline, giant simple dark eyes with single oval white highlight, huge rounded chibi head, flat colors and one hard-edge cel shadow, cute meme/sticker charm. Do not copy the blue maid. Image 2 is the official APPEARANCE reference: long silver-white hair, pointed ears, small crystalline blue crown/tiara, pale-blue and white royal dress, white fur at shoulders, deep blue shoulder ribbons, aqua crystal and small gold brooch at the chest, delicate icy forehead ornament. Simplify to the exact cute flat half-body sticker language of Image 1, facing viewer, calm little smile, both hands holding a small stylized snowflake crystal. Only half body, no legs or bow. Square genuinely transparent RGBA PNG, padding around silhouette. No scenery, no gradient glow, no words, no logo, no watermark, no detailed painterly anime rendering. Unofficial fan art.",
+      "references": [
+        "deepseek-smile as style only",
+        "https://genshin.hoyoverse.com/ja/news/detail/165003"
+      ]
+    }
+  ]
+}
