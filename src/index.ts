@@ -5,6 +5,8 @@ import {Engine} from './engine.ts'
 import {PREFIX, SOURCES, CHARACTERS} from './shared.ts'
 import {dayKey,history} from './accounting.ts'
 import {archivedState} from './persistence.ts'
+import {modelMatches,modelStats} from './ledger-stats.ts'
+import type {Currency} from './shared.ts'
 export const name = 'deepseek-whale-lite'
 const loader = '(function(){try{if(!window.dshDesktop||location.protocol!=="dsh-app:")return;var s=document.createElement("script");s.src="' + PREFIX + '/widget.js";s.onerror=function(){};(document.body||document.head).appendChild(s)}catch(e){}})()'
 async function body(req: IncomingMessage, max=8192): Promise<unknown> {
@@ -53,20 +55,19 @@ export function apply(root: Context): void {
     register('/history', (req,res) => {
       if(!get(req,res))return
       const q=new URL(req.url||'/','http://localhost').searchParams,range=q.get('range')??'today',source=q.get('source'),currency=q.get('currency'),scope=q.get('scope'),model=q.get('model')??'',day=q.get('day')
-      if(!['today','week','all'].includes(range)||(source&&!SOURCES.includes(source as typeof SOURCES[number]))||(currency&&!['CNY','USD'].includes(currency)))throw new Error('记录筛选无效')
+      if(!['today','week','month','all'].includes(range)||(source&&!SOURCES.includes(source as typeof SOURCES[number]))||(currency&&!['CNY','USD'].includes(currency)))throw new Error('记录筛选无效')
       const offset=Number(q.get('offset')??0);if(!Number.isSafeInteger(offset)||offset<0)throw new Error('分页参数无效')
-      const s=range==='all'?archivedState(engine.path,engine.state):engine.state,cut=dayKey(Date.now()-(range==='week'?6:0)*86400000)
+      const cut=dayKey(Date.now()-(range==='week'?6:range==='month'?29:0)*86400000),s=archivedState(engine.path,engine.state,range==='all'?undefined:cut)
       const matches=(r:{source:string;scope:string;day:string;currency?:string})=>(!source||r.source===source)&&(!scope||r.scope===scope)&&(!currency||!r.currency||r.currency===currency)&&(!day||r.day===day)&&(range==='all'||r.day>=cut)
       const rows=history(s).filter(matches)
-      const records=s.calls.filter(c=>matches({...c,day:dayKey(c.at)})&&c.model.toLowerCase().includes(model.toLowerCase())).sort((a,b)=>b.at-a.at)
-      const models=new Map<string,{source:string;scope:string;model:string;count:number;tokens:number}>()
-      for(const call of records){const key=[call.source,call.scope,call.model].join(':');const item=models.get(key)??{source:call.source,scope:call.scope,model:call.model,count:0,tokens:0};item.count++;item.tokens+=Object.values(call.usage).reduce((a,b)=>a+b,0);models.set(key,item)}
-      json(res,{rows,records:records.slice(offset,offset+50),models:[...models.values()],total:records.length,more:offset+50<records.length})
+      const records=s.calls.filter(c=>matches({...c,day:dayKey(c.at)})&&modelMatches(c.model,model)).sort((a,b)=>b.at-a.at)
+      json(res,{rows,records:records.slice(offset,offset+50),models:modelStats(records,currency as Currency|null??undefined),total:records.length,more:offset+50<records.length})
     })
     register('/bubbles',async(req,res)=>{if(req.method==='PUT'){engine.bubbles(await body(req,512*1024));json(res,engine.state.bubbles)}else if(get(req,res))json(res,engine.state.bubbles)})
     register('/resources',async(req,res)=>{
       if(req.method==='POST'){
-        const catalog=engine.resources.mutate(await body(req,30*1024*1024))
+        const input=await body(req,30*1024*1024),before=new Set(engine.resources.catalog().assets.map(a=>a.id)),catalog=engine.resources.mutate(input)
+        const imported=catalog.assets.find(a=>!before.has(a.id)&&a.kind==='role');if(imported)engine.state.settings.character=imported.id
         if(!catalog.assets.some(a=>a.id===engine.state.settings.character))engine.state.settings.character='deepseek-smile'
         if(!catalog.groups.some(g=>g.id===engine.state.settings.pressGroup))engine.state.settings.pressGroup='group-default'
         for(const [kind,e] of Object.entries(engine.state.settings.events))if(e.audio&&!catalog.assets.some(a=>a.id===e.audio)&&!catalog.groups.some(g=>g.id===e.audio))e.audio=kind==='complete'?'complete':'alert'
@@ -74,7 +75,7 @@ export function apply(root: Context): void {
       }else if(get(req,res))json(res,engine.resources.catalog())
     })
     register('/asset',(req,res)=>{if(!get(req,res))return;const id=new URL(req.url||'/','http://localhost').searchParams.get('id')??'';const asset=engine.resources.binary(id);res.writeHead(200,{'Content-Type':asset.mime,'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});res.end(asset.bytes)})
-    register('/notifications',async(req,res)=>{if(req.method==='PUT'){const v=await body(req) as {id:string};if(typeof v.id!=='string')throw new Error('通知 ID 无效');engine.dismiss(v.id);json(res,{ok:true})}else if(get(req,res)){const after=Number(new URL(req.url||'/','http://localhost').searchParams.get('after')??0);if(!Number.isSafeInteger(after)||after<0)throw new Error('通知游标无效');json(res,engine.notifications(after))}})
+    register('/notifications',async(req,res)=>{if(req.method==='PUT'){const v=await body(req) as {id:string;action?:string};if(typeof v.id!=='string')throw new Error('通知 ID 无效');if(v.action==='claim-sound'){json(res,{play:engine.claimSound(v.id)});return}if(v.action&&v.action!=='dismiss')throw new Error('通知操作无效');engine.dismiss(v.id);json(res,{ok:true})}else if(get(req,res)){const after=Number(new URL(req.url||'/','http://localhost').searchParams.get('after')??0);if(!Number.isSafeInteger(after)||after<0)throw new Error('通知游标无效');json(res,engine.notifications(after))}})
     register('/book-preferences',async(req,res)=>{if(req.method==='PUT'){engine.setPreferences(await body(req));json(res,engine.state.bookPreferences)}else if(get(req,res))json(res,engine.state.bookPreferences)})
     register('/adjustments',async(req,res)=>{
       if(req.method==='PUT'){json(res,await engine.adjust(await body(req)));return}

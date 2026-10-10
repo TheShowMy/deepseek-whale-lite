@@ -1,26 +1,33 @@
 import type {Source, Currency} from './shared.ts'
+import {PALETTES} from './palettes.ts'
+import type {Gradient} from './palettes.ts'
 export type ModuleType = 'text'|'link'|'random-text'|'image'|'random-image'|'balance'|'recharge'|'bonus'|'today'|'peak'|'session'|'cost'|'effect'
-export interface ModuleStyle {font: string; size: number; bold: boolean; italic: boolean; underline: boolean; color: string; background: string; gradient: 'none'|'rainbow'|'macaron'|'bamboo'}
+export interface ModulePaint {color:string;background:string;gradient:Gradient;backgroundGradient:Gradient}
+export interface ModuleStyle extends ModulePaint {font: string; size: number; bold: boolean; italic: boolean; underline: boolean}
+export interface RandomChoice {value:string;weight:number;style?:ModuleStyle}
+export type PeakStyle='inherit'|'default'|'liangwen'|'qiangqiang'|'count'|'mini'
 export interface BubbleModule {
   id: string; type: ModuleType; source: Source|'visible'; style: ModuleStyle
-  text: string; url: string; assetId: string; choices: {value: string; weight: number}[]
+  text: string; url: string; assetId: string; choices: RandomChoice[]
   length: number; currency: Currency|'auto'; effect: 'pet'|'coins'
+  imageScale:number;peakStyle:PeakStyle;peakPaint:ModulePaint;offPaint:ModulePaint
 }
 export interface BubbleDefinition {rows: BubbleModule[][]}
 export interface BubbleOption {id: string; weight: number; bubble: BubbleDefinition}
 export interface BubbleStep {id: string; options: BubbleOption[]}
 export interface BubbleConfig {revision: number; steps: BubbleStep[]; library: {id: string; name: string; module: BubbleModule}[]}
 export const MODULE_LABELS: Record<ModuleType,string> = {text:'文本',link:'超链接','random-text':'随机语句',image:'图片／动图','random-image':'随机图片',balance:'总余额',recharge:'充值余额',bonus:'赠金',today:'今日消费',peak:'峰谷时段',session:'对话名',cost:'本轮费用',effect:'内置动效'}
-export const DEFAULT_STYLE: ModuleStyle = {font:'system-ui',size:14,bold:false,italic:false,underline:false,color:'#536ba9',background:'',gradient:'none'}
+export const DEFAULT_STYLE: ModuleStyle = {font:'system-ui',size:14,bold:false,italic:false,underline:false,color:'#536ba9',background:'',gradient:'none',backgroundGradient:'none'}
+export const PEAK_OPTIONS:readonly (readonly [PeakStyle,string])[]=[['default','高峰／空闲'],['liangwen','梁文峰／梁文谷'],['qiangqiang','!?峰峰?!／!?谷谷?!'],['count','时段倒计时'],['mini','简洁峰／谷'],['inherit','继承 0.2 全局样式']]
 export function moduleOf(type: ModuleType, id: string = globalThis.crypto.randomUUID()): BubbleModule {
-  return {id,type,source:'visible',style:{...DEFAULT_STYLE},text:type==='text'?'你好呀！':'{value}',url:'https://www.deepseek.com',assetId:'',choices:[],length:12,currency:'auto',effect:'pet'}
+  return {id,type,source:'visible',style:{...DEFAULT_STYLE},text:type==='text'?'你好呀！':'{value}',url:'https://www.deepseek.com',assetId:'',choices:[],length:12,currency:'auto',effect:'pet',imageScale:1,peakStyle:'default',peakPaint:{color:'#e0433f',background:'',gradient:'none',backgroundGradient:'none'},offPaint:{color:'#2fa24c',background:'',gradient:'none',backgroundGradient:'none'}}
 }
 export function definition(text: string): BubbleDefinition {const m=moduleOf('text');m.text=text;return {rows:[[m]]}}
 export function defaultBubbles(): BubbleConfig {
   const title=moduleOf('text','title');title.text='DeepSeek 余额';title.style.bold=true;title.style.size=15
   const balance=moduleOf('balance','balances');balance.text='{source} {value}';balance.style.bold=true;balance.style.size=18
   const today=moduleOf('today','today');today.text='{source} 今日 {value}';today.style.size=9
-  const peak=moduleOf('peak','peak');peak.style.size=9
+  const peak=moduleOf('peak','peak');peak.style.size=9;peak.peakStyle='inherit'
   const random=moduleOf('random-text','greeting');random.choices=['鲸鲸帮你看好余额。','今天也要开心地写代码！','休息一下，喝口水吧。','两个账户，分别记账。'].map(value=>({value,weight:1}))
   const pet=moduleOf('effect','pet');pet.effect='pet'
   const coins=moduleOf('effect','coins');coins.effect='coins'
@@ -42,12 +49,20 @@ export function parseModule(value:unknown): BubbleModule {
   if(!['CNY','USD','auto'].includes(String(v.currency)))throw new Error('模块币种无效');m.currency=v.currency as BubbleModule['currency']
   if(!['pet','coins'].includes(String(v.effect)))throw new Error('动效无效');m.effect=v.effect as BubbleModule['effect']
   if(!Array.isArray(v.choices)||v.choices.length>100)throw new Error('随机项无效')
-  m.choices=v.choices.map(x=>{const c=record(x);return {value:text(c.value),weight:num(c.weight,1,10000)}})
-  const s=record(v.style);m.style={font:text(s.font,100),size:num(s.size,6,48),bold:s.bold===true,italic:s.italic===true,underline:s.underline===true,color:text(s.color,32),background:text(s.background,32),gradient:s.gradient as ModuleStyle['gradient']}
-  for(const c of [m.style.color,m.style.background])if(c&&!/^#(?:[a-f\d]{3}|[a-f\d]{4}|[a-f\d]{6}|[a-f\d]{8})$/i.test(c))throw new Error('颜色无效')
-  if(!['none','rainbow','macaron','bamboo'].includes(m.style.gradient))throw new Error('渐变无效')
+  m.choices=v.choices.map(x=>{const c=record(x);return {value:text(c.value),weight:num(c.weight,1,10000),...(c.style?{style:parseStyle(c.style)}:{})}})
+  m.style=parseStyle(v.style);m.imageScale=v.imageScale===undefined?1:num(v.imageScale,.1,1)
+  m.peakStyle=v.peakStyle===undefined?'inherit':text(v.peakStyle) as PeakStyle;if(!PEAK_OPTIONS.some(([id])=>id===m.peakStyle))throw new Error('峰谷样式无效')
+  if(v.peakPaint!==undefined)m.peakPaint=parsePaint(v.peakPaint);if(v.offPaint!==undefined)m.offPaint=parsePaint(v.offPaint)
   return m
 }
+export function parsePaint(value:unknown):ModulePaint {
+  const s=record(value),color=text(s.color,32),background=text(s.background,32)
+  for(const c of [color,background])if(c&&!/^#(?:[a-f\d]{3}|[a-f\d]{4}|[a-f\d]{6}|[a-f\d]{8})$/i.test(c))throw new Error('颜色无效')
+  const gradient=(v:unknown):Gradient=>{if(v!=='none'&&(typeof v!=='string'||!Object.hasOwn(PALETTES,v)))throw new Error('渐变无效');return v as Gradient}
+  const old=s.backgroundGradient===undefined,fg=old&&['macaron','bamboo'].includes(String(s.gradient))?'legacy-'+String(s.gradient):s.gradient
+  return {color,background,gradient:gradient(fg),backgroundGradient:gradient(s.backgroundGradient??'none')}
+}
+export function parseStyle(value:unknown):ModuleStyle{const s=record(value);return {...parsePaint(s),font:text(s.font,100),size:num(s.size,6,48),bold:s.bold===true,italic:s.italic===true,underline:s.underline===true}}
 export function imageModule(m:BubbleModule):boolean {return ['image','random-image','effect'].includes(m.type)}
 export function parseDefinition(value:unknown): BubbleDefinition {
   const v=record(value);if(!Array.isArray(v.rows)||!v.rows.length||v.rows.length>6)throw new Error('气泡须有 1–6 行')
@@ -83,3 +98,5 @@ export function moveModule(bubble:BubbleDefinition,fromRow:number,fromCol:number
   if(newRow)next.rows.splice(toRow,0,[m]);else {const row=next.rows[toRow];if(!row)throw new Error('找不到目标行');if(fromRow===toRow&&fromCol<toCol)toCol--;row.splice(toCol,0,m)}
   next.rows=next.rows.filter(r=>r.length);return parseDefinition(next)
 }
+export function moveRow(bubble:BubbleDefinition,from:number,to:number):BubbleDefinition{const next=structuredClone(bubble),[row]=next.rows.splice(from,1);if(!row)throw new Error('找不到行');next.rows.splice(to>from?to-1:to,0,row);return parseDefinition(next)}
+export function insertModule(bubble:BubbleDefinition,module:BubbleModule,row:number,col:number,newRow=false):BubbleDefinition{const next=structuredClone(bubble),m={...structuredClone(module),id:globalThis.crypto.randomUUID()};if(newRow)next.rows.splice(row,0,[m]);else next.rows[row].splice(col,0,m);return parseDefinition(next)}

@@ -1,4 +1,6 @@
-# 0.2.0 验收记录
+# 0.2.0 历史验收记录
+
+本页仅记录当时执行的检查；新增 0.3 功能与明确的验证级别见 [QA-0.3.0.md](QA-0.3.0.md) 和 [逐项对照](UPSTREAM-PARITY.md)。
 
 日期：2026-10-10。环境：官方 DSH 桌面端 **0.2.0-rc.2 / macOS arm64**。实现基线 `aa3cd88`，对照上游 `main / fce34e3`。逐项范围见 [UPSTREAM-PARITY.md](UPSTREAM-PARITY.md)。
 

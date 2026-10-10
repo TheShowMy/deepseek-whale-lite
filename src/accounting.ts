@@ -19,7 +19,7 @@ export function units(value: string | number): number {
 }
 export function dayKey(at = Date.now()): string { return new Date(at + 8 * 3600000).toISOString().slice(0, 10) }
 export function emptyState(): State {
-  return {version: 2, settings: structuredClone(DEFAULT_SETTINGS), books: {}, calls: [], completions: [], completionSeq: 0, seen: {}, turnScopes: {}, ...emptyV2Fields()}
+  return {version: 3, settings: structuredClone(DEFAULT_SETTINGS), books: {}, calls: [], completions: [], completionSeq: 0, seen: {}, turnScopes: {}, ...emptyV2Fields(),soundPlayed:[]}
 }
 export function bookKey(source: Source, scope: string, currency: Currency): string { return [source, scope, currency].join(':') }
 export function observe(state: State, source: Source, scope: string, currency: Currency, total: number, at: number): void {
@@ -95,6 +95,7 @@ export function prune(state: State, now = Date.now()): void {
   state.turnScopes = Object.fromEntries(Object.entries(state.turnScopes).slice(-1000))
   state.notifications=state.notifications.filter(n=>n.pending||n.at>=now-7*86400000).slice(-1000)
   state.dismissed=state.dismissed.slice(-20000)
+  state.soundPlayed=state.soundPlayed.slice(-20000)
 }
 export function correctedAmount(row:import('./shared.ts').DayRow):number {return row.correction?row.correction.amount+row.debit-row.correction.debit:row.debit}
 export function revision(source:Source,scope:string,currency:Currency,row:import('./shared.ts').DayRow):string {return [source,scope,currency,row.day,row.firstAt,row.last,row.debit,row.credit,row.revision??0].join(':')}

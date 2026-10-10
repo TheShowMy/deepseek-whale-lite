@@ -19,7 +19,10 @@ export class Engine {
   }
   save():void {if(!this.closed)saveState(this.path,this.state)}
   refresh(source:Source):Promise<BalanceView>{const running=this.flights[source];if(running)return running
-    const promise=this.sources.fetch(source).then(view=>{if(this.closed)return view;this.balances[source]=view
+    const previous=this.balances[source]
+    const promise=this.sources.fetch(source).then(async view=>{if(this.closed)return view
+      if(view.failure==='temporary'&&previous.scope&&previous.updatedAt&&previous.wallets.length){const identity=await this.sources.identity(source).catch(()=>null);if(identity===previous.scope)view={...previous,status:'failed',failure:'temporary',stale:true,message:'缓存余额 · 刷新失败：'+view.message}}
+      if(this.closed)return view;this.balances[source]=view
       if(view.status==='ready'&&view.scope&&view.updatedAt)for(const w of view.wallets){observe(this.state,source,view.scope,w.currency,w.total,view.updatedAt);this.checkAlerts(source,view.scope,w.currency,w.total,view.updatedAt)}
       this.save();return view
     }).catch(()=>{const view:BalanceView={source,label:source==='account'?'DeepSeek 账号':'API Key',status:'failed',message:'余额或账本更新失败，请稍后重试',scope:null,updatedAt:null,wallets:[]};if(!this.closed)this.balances[source]=view;return view}).finally(()=>{delete this.flights[source]})
@@ -32,7 +35,7 @@ export class Engine {
     const next=parseSettings(input,this.state.settings,this.resources.catalog().assets.filter(a=>a.kind==='role').map(a=>a.id));next.events=events
     if(!this.resources.catalog().groups.some(g=>g.id===next.pressGroup))throw new Error('按压音效组不存在')
     for(const e of Object.values(events))if(e.audio&&this.resources.asset(e.audio)?.kind!=='audio'&&!this.resources.catalog().groups.some(g=>g.id===e.audio))throw new Error('提醒音效不存在')
-    this.state.settings=next;for(const source of SOURCES){const v=this.balances[source];if(v.scope)for(const w of v.wallets)this.checkAlerts(source,v.scope,w.currency,w.total,v.updatedAt??Date.now())}this.save()
+    this.state.settings=next;for(const source of SOURCES){const v=this.balances[source];if(v.status==='ready'&&v.scope)for(const w of v.wallets)this.checkAlerts(source,v.scope,w.currency,w.total,v.updatedAt??Date.now())}this.save()
   }
   bubbles(input:unknown):void {const next=parseBubbles(input);if(next.revision!==this.state.bubbles.revision)throw Object.assign(new Error('气泡配置已更新，请重新打开编辑器'),{status:409});next.revision++;this.state.bubbles=next;this.save()}
   rows(all=false){return history(all?archivedState(this.path,this.state):this.state)}
@@ -54,6 +57,11 @@ export class Engine {
   }
   notify(value:Omit<Notification,'seq'>):void {if(this.state.notifications.some(n=>n.id===value.id))return;this.state.notifications.push({...value,seq:++this.state.notificationSeq})}
   dismiss(id:string):void {if(!this.state.notifications.some(n=>n.id===id))return;if(!this.state.dismissed.includes(id))this.state.dismissed.push(id);this.save()}
+  claimSound(id:string):boolean {
+    const n=this.state.notifications.find(n=>n.id===id);if(!n||this.state.soundPlayed.includes(id)||this.state.dismissed.includes(id))return false
+    this.state.soundPlayed.push(id);this.save();const cfg=this.state.settings.events[n.kind]
+    return this.state.settings.sound&&cfg.enabled&&cfg.sound&&!!cfg.audio&&(!['question','approval'].includes(n.kind)||n.pending)
+  }
   notifications(after:number){return {seq:this.state.notificationSeq,items:this.state.notifications.filter(n=>n.seq>after&&!this.state.dismissed.includes(n.id)),pending:this.state.notifications.filter(n=>n.pending&&!this.state.dismissed.includes(n.id))}}
   async adjust(input:unknown){const v=object(input),source=v.source as Source,currency=v.currency as Currency,scope=String(v.scope),day=String(v.day)
     if(!SOURCES.includes(source)||!['CNY','USD'].includes(currency)||!this.state.books[bookKey(source,scope,currency)]||typeof v.revision!=='string')throw new Error('校正账本无效')
@@ -67,10 +75,13 @@ export class Engine {
     if(this.closed||!Number.isSafeInteger(event.seq)||event.seq<0||(session.isOwnSeq&&!session.isOwnSeq(event.seq)))return
     const data=object(event.data),turn=data.turn,step=data.step,sid=session.id
     if(event.type==='session/title'){if(typeof data.title==='string')this.titles.set(sid,data.title.slice(0,120));return}
-    try{const service=this.sources.ctx.get('sessionTitle') as {get?:(s:Session)=>unknown}|undefined;const title=object(service?.get?.(session)).title;if(typeof title==='string')this.titles.set(sid,title.slice(0,120))}catch{/* optional title service */}
-    const cid=String(object(data.message).callId??data.callId??data.id??'')
-    if(event.type==='tool/result'){for(const n of this.state.notifications)if(n.pending&&n.session===sid&&n.kind==='question'&&n.id==='question:'+sid+':'+cid)n.pending=false;this.save();return}
-    if(event.type==='approval/decided'){for(const n of this.state.notifications)if(n.pending&&n.session===sid&&n.id==='approval:'+sid+':'+cid)n.pending=false;this.save();return}
+    if((this.state.seen[sid]??-1)>=event.seq)return
+    try{const service=this.sources.ctx.get('sessionTitle') as {get?:(s:Session)=>unknown}|undefined;const raw=service?.get?.(session),title=typeof raw==='string'?raw:object(raw).title??object(raw).text;if(typeof title==='string')this.titles.set(sid,title.slice(0,120))}catch{/* optional title service */}
+    const message=object(data.message),content=Array.isArray(message.content)?message.content.map(object):[],part=content.find(c=>c.toolCallId||c.tool_call_id)
+    const cid=String(message.callId??message.toolCallId??message.tool_call_id??part?.toolCallId??part?.tool_call_id??data.callId??data.call_id??data.toolCallId??data.id??'')
+    if(event.type==='tool/result'){for(const n of this.state.notifications)if(n.pending&&n.session===sid&&n.kind==='question'&&(!cid||n.id==='question:'+sid+':'+cid))n.pending=false;this.save();return}
+    if(event.type.startsWith('approval/')&&event.type!=='approval/asked'){for(const n of this.state.notifications)if(n.pending&&n.session===sid&&n.kind==='approval'&&(!cid||n.id==='approval:'+sid+':'+cid))n.pending=false;this.save();return}
+    if(event.type==='turn/start'){for(const n of this.state.notifications)if(n.pending&&n.session===sid)n.pending=false;this.providers.delete(sid);this.save();return}
     if((event.type==='tool/call'&&String(data.name??data.toolName)==='ask_user_question')||event.type==='approval/asked'){
       const source=this.providers.get(sid);if(!source||!cid)return
       const kind=event.type==='approval/asked'?'approval':'question';this.notify({id:kind+':'+sid+':'+cid,kind,at:event.time,session:sid,title:this.titles.get(sid)??'当前对话',source,pending:true});this.save();return

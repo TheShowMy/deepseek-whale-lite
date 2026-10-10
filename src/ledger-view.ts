@@ -4,7 +4,10 @@ import type {CallRecord,BookPreferences,Source,Currency} from './shared.ts'
 import {bookKey,SCALE,units} from './accounting.ts'
 import {money,sourceName,costText} from './bubble-view.ts'
 import type {HistoryRow} from './bubble-view.ts'
-type HistoryResult={rows:HistoryRow[];records:CallRecord[];models:{source:Source;scope:string;model:string;count:number;tokens:number}[];total:number;more:boolean}
+import type {ModelStat} from './ledger-stats.ts'
+import {modelLabel} from './ledger-stats.ts'
+import {ledgerCharts,modelCharts} from './ledger-chart.ts'
+type HistoryResult={rows:HistoryRow[];records:CallRecord[];models:ModelStat[];total:number;more:boolean}
 
 export function bookPreferences(root:ShadowRoot,client:Client,row:HistoryRow):void {
   const d=dialog(root,sourceName(row.source)+' · '+row.scope.slice(0,8)+' · '+row.currency+' 提醒设置')
@@ -28,26 +31,27 @@ export function correction(root:ShadowRoot,client:Client,initial:HistoryRow,upda
 }
 
 export async function openLedger(root:ShadowRoot,client:Client):Promise<void>{
-  let generation=0,offset=0,result:HistoryResult={rows:[],records:[],models:[],total:0,more:false}
+  let generation=0,offset=0,result:HistoryResult={rows:[],records:[],models:[],total:0,more:false},chartRows:HistoryRow[]=[]
   const d=dialog(root,'余额账本与本机调用'),tools=el('div','','tools'),days=el('div'),models=el('div'),records=el('div'),more=button('加载更多调用',()=>{offset+=50;void report(d,()=>load(true))})
   const range=select([['today','今日'],['week','近七天'],['all','全部（含归档）']],'today'),source=select([['','两种来源'],['account','登录账号'],['api-key','API Key']],''),currency=select([['CNY','CNY'],['USD','USD']],'CNY'),scope=select([['','全部作用域']],''),search=input('');search.placeholder='搜索模型';search.setAttribute('aria-label','搜索模型')
   const selectedDay=input('','date');selectedDay.setAttribute('aria-label','按日期筛选');tools.append(range,source,currency,scope,search,selectedDay,button('清除日期',()=>{selectedDay.value='';void report(d,()=>load())}))
-  d.body.append(tools,el('p','余额变化与本机调用估算分开显示；不同来源、作用域和币种分别记账。费用是已核实峰谷费率的估算区间，未知模型不猜价格。','muted'),days,models,records,more)
+  const chartSection=el('details','','section'),charts=el('div'),measure=select([['observed','账户余额下降／校正消费'],['estimate','本机调用估算']],'observed'),metric=select([['cost','费用估算占比'],['tokens','token 占比']],'cost');chartSection.append(el('summary','近 30 天图表与累计概览'),field('图表数值',measure),charts);measure.onchange=()=>drawCharts();metric.onchange=()=>modelCharts(models,result.models,metric.value as 'cost'|'tokens')
+  d.body.append(tools,el('p','余额变化与本机调用估算分开显示；不同来源、作用域和币种分别记账。费用是已核实峰谷费率的估算区间，未知模型不猜价格。图表固定为近 30 天，概览含该账本全部历史。','muted'),chartSection,days,field('模型占比口径',metric),models,records,more)
   for(const control of [range,source,currency,scope,search,selectedDay])control.onchange=()=>{void report(d,()=>load())}
-  async function load(append=false){const own=++generation;if(!append)offset=0;const q=new URLSearchParams({range:range.value,source:source.value,currency:currency.value,scope:scope.value,model:search.value,day:selectedDay.value,offset:String(offset)}),data=await client.api<HistoryResult>('/history?'+q);if(own!==generation||!d.mask.isConnected)return;result={...data,records:append?[...result.records,...data.records]:data.records};draw()}
+  selectedDay.onchange=()=>{if(selectedDay.value)range.value='all';void report(d,()=>load())}
+  async function load(append=false){const own=++generation;if(!append)offset=0;const q=new URLSearchParams({range:range.value,source:source.value,currency:currency.value,scope:scope.value,model:search.value,day:selectedDay.value,offset:String(offset)}),chartQuery=new URLSearchParams({range:'all',source:source.value,currency:currency.value,scope:scope.value});const [data,all]=await Promise.all([client.api<HistoryResult>('/history?'+q),client.api<HistoryResult>('/history?'+chartQuery)]);if(own!==generation||!d.mask.isConnected)return;chartRows=all.rows;result={...data,records:append?[...result.records,...data.records]:data.records};draw()}
+  function drawCharts(){ledgerCharts(charts,chartRows,measure.value as 'observed'|'estimate',row=>{selectedDay.value=row.day;range.value='all';source.value=row.source;currency.value=row.currency;scope.value=row.scope;void report(d,async()=>{await load();const target=days.querySelector<HTMLDetailsElement>('[data-book="'+bookKey(row.source,row.scope,row.currency)+'"]');if(target){target.open=true;target.scrollIntoView({block:'nearest'})}})})}
   function draw(){
-    const current=scope.value,scopes=new Set(result.rows.map(r=>r.scope));scope.replaceChildren(new Option('全部作用域',''));for(const s of scopes)scope.add(new Option(s.slice(0,12),s));if(scopes.has(current))scope.value=current
+    const current=scope.value,scopes=new Set([...chartRows,...result.rows].map(r=>r.scope));scope.replaceChildren(new Option('全部作用域',''));for(const s of scopes)scope.add(new Option(s.slice(0,12),s));if(scopes.has(current))scope.value=current;drawCharts()
     days.replaceChildren();for(const row of result.rows){
-      const item=el('details','','section'),summary=el('summary',row.day+' · '+sourceName(row.source)+' ['+row.scope.slice(0,8)+'] · '+row.currency+' · '+(row.observed?money(row.amount,row.currency,4):'无余额观测'));item.append(summary,el('p','本机估算 '+money(row.estimate.low,row.currency,6)+'–'+money(row.estimate.high,row.currency,6)+' · '+row.estimate.tokens+' tokens'+(row.estimate.unknown?' · '+row.estimate.unknown+' 次费用未知':'')))
+      const item=el('details','','section'),summary=el('summary',row.day+' · '+sourceName(row.source)+' ['+row.scope.slice(0,8)+'] · '+row.currency+' · '+(row.observed?money(row.amount,row.currency,4):'无余额观测'));item.dataset.book=bookKey(row.source,row.scope,row.currency);item.append(summary,el('p','本机估算 '+money(row.estimate.low,row.currency,6)+'–'+money(row.estimate.high,row.currency,6)+' · '+row.estimate.tokens+' tokens'+(row.estimate.unknown?' · '+row.estimate.unknown+' 次费用未知':'')))
       if(row.observed){item.append(el('p','原始余额下降 '+money(row.debit,row.currency,4)+' · 余额增加 '+money(row.credit,row.currency,4)+(row.needsReview?' · 有余额增加待核对':'')),el('p','观测从 '+new Date(row.firstAt).toLocaleString()+' 开始，最近 '+new Date(row.lastAt).toLocaleString(),'muted'),button('校正／撤销',()=>correction(root,client,row,()=>load())),button('账本提醒',()=>bookPreferences(root,client,row)));for(const log of row.correctionLog??[])item.append(el('p',new Date(log.at).toLocaleString()+' · '+(log.next?'校正 '+money(log.next.amount,row.currency,8):'撤销校正'),'muted'))}
       item.append(button('查看这一天的调用',()=>{selectedDay.value=row.day;source.value=row.source;currency.value=row.currency;scope.value=row.scope;void report(d,()=>load())}));days.append(item)
     }
     if(!result.rows.length)days.append(el('p','此筛选下还没有余额观测或调用记录。'))
-    models.replaceChildren(el('h3','模型占比（此筛选全部调用的 token 数）'))
-    const counts=new Map<string,number>();for(const model of result.models){const key=sourceName(model.source)+' ['+model.scope.slice(0,8)+'] · '+model.model;counts.set(key,model.tokens)}const total=[...counts.values()].reduce((a,b)=>a+b,0)
-    for(const [key,count]of [...counts].sort((a,b)=>b[1]-a[1])){const bar=el('div','','model-bar');bar.style.width=(total?count/total*100:0)+'%';models.append(el('div',key+' · '+(total?count/total*100:0).toFixed(1)+'%'),bar)}
-    records.replaceChildren(el('h3','逐轮调用 · '+result.total+' 条'))
-    for(const call of result.records){const item=el('div','','record');item.append(el('strong',sourceName(call.source)+' ['+call.scope.slice(0,8)+'] · '+call.model),el('div',new Date(call.at).toLocaleString()+' · 第 '+call.turn+' 轮 · 会话 '+call.session.slice(0,8),'muted'),el('div',costText([call],currency.value as Currency)),el('div','输入 '+call.usage.inputTokens+' · 缓存命中 '+call.usage.cacheReadTokens+' · 缓存写入 '+call.usage.cacheWriteTokens+' · 输出 '+call.usage.outputTokens,'muted'));records.append(item)}more.hidden=!result.more
+    modelCharts(models,result.models,metric.value as 'cost'|'tokens')
+    records.replaceChildren(el('h3','调用明细 · '+result.total+' 条'))
+    for(const call of result.records){const item=el('div','','record');item.append(el('strong',sourceName(call.source)+' ['+call.scope.slice(0,8)+'] · '+modelLabel(call.model)),el('div',call.model+' · '+new Date(call.at).toLocaleString()+' · 第 '+call.turn+' 轮 · 会话 '+call.session.slice(0,8),'muted'),el('div',costText([call],currency.value as Currency)),el('div','输入 '+call.usage.inputTokens+' · 缓存命中 '+call.usage.cacheReadTokens+' · 缓存写入 '+call.usage.cacheWriteTokens+' · 输出 '+call.usage.outputTokens,'muted'));records.append(item)}more.hidden=!result.more
   }
   d.footer.append(button('关闭',d.close));await report(d,()=>load())
 }

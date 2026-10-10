@@ -44,7 +44,7 @@ test('waiting interactions preempt, other reminders queue, dedup and resolution 
 test('v1 migration backs up exact bytes, preserves choices/data and is idempotent; corrupt files protected',()=>{
   const dir=temporary(),path=join(dir,'state.json')
   try{const old=emptyState();observe(old,'account','a','CNY',units('20'),Date.now());old.settings.displayMode='both';old.settings.character='lumine';old.settings.x=23;old.settings.volume=.7;const {bubbles,bookPreferences,notifications,notificationSeq,alertState,dismissed,...v1}=old;const raw=JSON.stringify({...v1,version:1});writeFileSync(path,raw)
-    const migrated=loadState(path);assert.equal(migrated.version,2);assert.equal(readFileSync(path+'.v1.bak','utf8'),raw);assert.deepEqual(migrated.books,old.books);assert.equal(migrated.settings.character,'lumine');assert.equal(migrated.settings.x,23);assert.equal(migrated.settings.volume,.7);assert.equal(migrated.settings.displayMode,'both');assert.equal(migrated.settings.events.approval.enabled,false)
+    const migrated=loadState(path);assert.equal(migrated.version,3);assert.equal(readFileSync(path+'.v1.bak','utf8'),raw);assert.deepEqual(migrated.books,old.books);assert.equal(migrated.settings.character,'lumine');assert.equal(migrated.settings.x,23);assert.equal(migrated.settings.volume,.7);assert.equal(migrated.settings.displayMode,'both');assert.equal(migrated.settings.events.approval.enabled,false)
     const bytes=readFileSync(path,'utf8');assert.deepEqual(loadState(path),migrated);assert.equal(readFileSync(path,'utf8'),bytes);assert.equal(readFileSync(path+'.v1.bak','utf8'),raw)
     writeFileSync(path,'{broken');assert.throws(()=>loadState(path));assert.equal(readFileSync(path,'utf8'),'{broken')
   }finally{rmSync(dir,{recursive:true,force:true})}
