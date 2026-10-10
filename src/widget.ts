@@ -1,215 +1,82 @@
-import {PREFIX, CHARACTERS, SOURCES, DEFAULT_SETTINGS} from './shared.ts'
-import type {Settings, Snapshot, BalanceView, Completion, Source, Currency} from './shared.ts'
-import {SCALE, dayKey, totals} from './accounting.ts'
-type Row = {day: string; source: Source; scope: string; currency: Currency; observed: boolean; firstAt: number; lastAt: number; debit: number; credit: number; estimate: ReturnType<typeof totals>}
-declare global {interface Window {dshDesktop?: unknown; __deepseekWhaleLite?: () => void}}
-async function mount(): Promise<void> {
-  if (!window.dshDesktop || location.protocol !== 'dsh-app:' || location.hostname !== 'app' || window.__deepseekWhaleLite) return
-  const lifecycle = new AbortController()
-  let stopped = false; let poll: ReturnType<typeof setTimeout>; let cursor = 0
-  let settings: Settings = structuredClone(DEFAULT_SETTINGS)
-  let snapshot: Snapshot; let rows: Row[] = []; let last: Completion | null = null
-  let historyOpen = false; let settingsOpen = false; let initialized = false
-  const alerts = new Set<string>(); const audio = new Map<string, HTMLAudioElement>()
-  const host = document.createElement('div'); host.id = 'deepseek-whale-lite'; host.style.cssText = 'position:fixed;z-index:2147483000;width:290px;transform-origin:top left;'
-  const shadow = host.attachShadow({mode: 'open'})
-  const style = document.createElement('style')
-  style.textContent = `
-    :host{font:12px/1.45 system-ui,sans-serif;color:#18344a;--bg:#f7fbff;--line:#d6e7f2;--muted:#647d90;--accent:#207eb4;--card:#fff}
-    *{box-sizing:border-box}button,input,select{font:inherit}button,select,input{border:1px solid var(--line);border-radius:8px;color:inherit;background:var(--card);padding:5px 7px}button{cursor:pointer}button:hover{border-color:var(--accent)}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-    .panel{border:1px solid var(--line);border-radius:16px;padding:11px;background:var(--bg);box-shadow:0 6px 24px #09294125;max-height:var(--panel-height,650px);overflow:auto}.title{display:flex;align-items:center;gap:6px;cursor:grab;user-select:none}.title strong{flex:1;font-size:13px}.title button{padding:2px 6px}.card{border-top:1px solid var(--line);margin-top:8px;padding-top:8px}.label{display:flex;align-items:center;gap:6px}.label strong{flex:1}.label button{font-size:11px}.sub{font-size:11px;color:var(--muted);overflow-wrap:anywhere}.money{font-size:20px;font-weight:750;margin:2px 0}.low{color:#b34421}.failure{color:#9d5a30;margin:7px 0}.toolbar{display:flex;gap:6px;margin-top:8px}.toolbar select{flex:1;min-width:0}.figure{display:block;width:156px;height:156px;margin:0 auto;padding:0;border:0;background:transparent;touch-action:none;cursor:grab}.figure img{width:100%;height:100%;object-fit:contain;pointer-events:none;user-select:none}.figure.pressed img{translate:0 3px;scale:.96}.figure.flipped img{transform:scaleX(-1)}
-    .bubble{border-radius:12px;padding:8px 10px;margin-bottom:7px;background:var(--card);border:1px solid var(--line);white-space:pre-line;max-height:130px;overflow:auto}.form{margin-top:9px;display:grid;grid-template-columns:1fr 1fr;gap:8px}.form label{display:flex;flex-direction:column;gap:3px}.form input,.form select{width:100%}.form .wide{grid-column:span 2}.history{max-height:230px;overflow:auto;margin-top:8px}.history article{border-top:1px solid var(--line);padding:7px 0}.note{color:var(--muted);margin-top:6px;font-size:10px}[hidden]{display:none!important}
-    @media(prefers-color-scheme:dark){:host{color:#d6eaf8;--bg:#182a38;--card:#213746;--line:#3b5465;--muted:#a8becd;--accent:#65bce8}.low{color:#ffc39d}.failure{color:#ffcdab}}
+import {PREFIX,DEFAULT_SETTINGS,SOURCES} from './shared.ts'
+import type {Settings,Notification,BalanceView} from './shared.ts'
+import type {BubbleConfig,BubbleDefinition} from './bubbles.ts'
+import {ClickQueue,definition} from './bubbles.ts'
+import {NotificationQueue,EVENT_LABELS} from './notifications.ts'
+import type {Catalog} from './resources.ts'
+import {BubbleRenderer,BUBBLE_CSS,money,sourceName} from './bubble-view.ts'
+import type {RenderContext,UiSnapshot,HistoryRow} from './bubble-view.ts'
+import {el,button,select,field,dialog,report,UI_CSS} from './ui.ts'
+import type {Client} from './ui.ts'
+import {openBubbleEditor} from './bubble-editor.ts'
+import {openAssets} from './asset-manager.ts'
+import {openLedger,bookPreferences} from './ledger-view.ts'
+import {openSettings} from './settings-view.ts'
+declare global {interface Window {dshDesktop?:unknown;__deepseekWhaleLite?:()=>void}}
+
+export async function mount(desktopOnly=true):Promise<void>{
+  if((desktopOnly&&(!window.dshDesktop||location.protocol!=='dsh-app:'||location.hostname!=='app'))||window.__deepseekWhaleLite)return
+  const lifecycle=new AbortController(),host=el('div'),portal=el('div'),shadow=host.attachShadow({mode:'open'}),panels=portal.attachShadow({mode:'open'})
+  host.id='deepseek-whale-lite';host.style.cssText='position:fixed;z-index:2147483000;width:300px;height:300px;transform-origin:top left;pointer-events:none;background:transparent'
+  portal.id='deepseek-whale-lite-panels';portal.style.cssText='position:fixed;inset:0;z-index:2147483001;pointer-events:none'
+  const style=el('style');style.textContent=UI_CSS+BUBBLE_CSS+`
+  .figure{position:absolute;right:0;bottom:0;width:59.45%;height:59.45%;padding:0;border:0;background:transparent;pointer-events:auto;touch-action:none;cursor:grab;transform-origin:center bottom}.figure img{display:block;width:100%;height:100%;pointer-events:none;user-select:none;transform-origin:bottom center;transition:transform .35s cubic-bezier(.3,1.8,.6,1)}.figure.pressed img{transform:scale(1.08,.86)}:host(.left) .figure{right:auto;left:0;scale:-1 1}.menu-toggle{position:absolute;right:3px;bottom:125px;z-index:3;pointer-events:auto;opacity:0;transition:opacity .2s}.menu-toggle:focus-visible,:host(:hover) .menu-toggle{opacity:1}:host(.left) .menu-toggle{right:auto;left:3px}.speech-content{cursor:pointer}
   `
-  const panel = document.createElement('section'); panel.className = 'panel'; panel.setAttribute('aria-label', 'DeepSeek 余额挂件')
-  const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.hidden = true; bubble.setAttribute('aria-live', 'polite')
-  const title = document.createElement('div'); title.className = 'title'
-  const heading = document.createElement('strong'); heading.textContent = 'DeepSeek Whale Lite'
-  const historyButton = button('历史', () => {historyOpen = !historyOpen; renderExtras()})
-  const settingsButton = button('设置', () => {settingsOpen = !settingsOpen; renderExtras()})
-  title.append(heading, historyButton, settingsButton)
-  const cards = document.createElement('div')
-  const toolbar = document.createElement('div'); toolbar.className = 'toolbar'
-  const mode = document.createElement('select'); mode.setAttribute('aria-label', '余额显示模式')
-  for (const [value, text] of [['both', '两个余额同时显示'], ['account', '仅账号登录'], ['api-key', '仅 API Key']]) mode.add(new Option(text, value))
-  mode.addEventListener('change', () => {void update({displayMode: mode.value as Settings['displayMode']})}, {signal:lifecycle.signal})
-  toolbar.append(mode, button('刷新', () => {for (const source of visible()) void refresh(source)}))
-  const extras = document.createElement('div')
-  panel.append(bubble, title, cards, toolbar, extras)
-  const figure = document.createElement('button'); figure.className = 'figure'; figure.setAttribute('aria-label', '拖动角色；点击显示最近一轮消耗')
-  const image = document.createElement('img'); image.alt = 'DeepSeek Q 版角色'; image.draggable = false
-  figure.append(image); shadow.append(style, panel, figure); document.body.append(host)
-  function cleanup() {
-    stopped = true; clearTimeout(poll); lifecycle.abort(); host.remove()
-    for (const sound of audio.values()) {sound.pause(); sound.src = ''}
-    delete window.__deepseekWhaleLite
-  }
-  window.__deepseekWhaleLite = cleanup
-  function button(label: string, fn: () => void): HTMLButtonElement {
-    const b = document.createElement('button'); b.type = 'button'; b.textContent = label
-    b.onclick = fn; return b
-  }
-  function say(text: string) {bubble.textContent = text; bubble.hidden = false; if (!drag) place()}
-  function sound(name: string) {
-    if (!settings.sound) return
-    let a = audio.get(name); if (!a) {a = new Audio(PREFIX + '/sounds/' + name + '.ogg'); audio.set(name, a)}
-    a.volume = settings.volume; a.currentTime = 0; void a.play().catch(() => {})
-  }
-  async function api<T>(path: string, init?: RequestInit): Promise<T> {
-    const res = await fetch(PREFIX + path, {...init, signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(25000)])})
-    if (res.status === 404) cleanup()
-    if (!res.ok) throw new Error('宿主请求失败')
-    return res.json() as Promise<T>
-  }
-  function visible(): Source[] {return settings.displayMode === 'both' ? SOURCES : [settings.displayMode ?? 'api-key']}
-  function money(n: number, currency: Currency, digits = 2): string {
-    return (currency === 'CNY' ? '¥' : '$') + (n / SCALE).toFixed(digits)
-  }
-  function cost(total: ReturnType<typeof totals>, currency: Currency): string {
-    return (total.unknown ? '含 ' + total.unknown + ' 次费用未知；已知部分 ' : '') + money(total.low,currency,6) + '–' + money(total.high,currency,6)
-  }
-  function render(forceExtras = false) {
-    if (drag) return
-    const lowMessages: string[] = []
-    cards.replaceChildren(); mode.value = settings.displayMode ?? 'both'
-    image.src = PREFIX + '/characters/' + settings.character + '.png'
-    figure.classList.toggle('flipped', settings.flip)
-    host.style.transform = 'scale(' + settings.scale + ')'
-    for (const source of visible()) {
-      const view = snapshot.balances[source]
-      const card = document.createElement('article'); card.className = 'card'; card.dataset.source = source
-      const label = document.createElement('div'); label.className = 'label'
-      const name = document.createElement('strong'); name.textContent = source === 'account' ? '账号登录' : 'API Key'
-      label.append(name, button('刷新', () => {void refresh(source)})); card.append(label)
-      line(card, view.label, 'sub')
-      if (view.status !== 'ready') line(card, view.message, 'failure')
-      else for (const wallet of view.wallets) {
-        const low = wallet.total < settings.lowBalance[wallet.currency] * SCALE
-        line(card, money(wallet.total, wallet.currency) + ' ' + wallet.currency, low ? 'money low' : 'money')
-        line(card, '充值 ' + money(wallet.recharge,wallet.currency) + ' · 赠送 ' + money(wallet.bonus,wallet.currency), 'sub')
-        const row = rows.find(r => r.day === dayKey() && r.source === source && r.scope === view.scope && r.currency === wallet.currency)
-        line(card, row?.observed ? '今日观测下降 ' + money(row.debit,wallet.currency,4) + (row.credit ? ' · 有余额增加，待核对' : '') : '今日尚无余额观测', 'sub')
-        if (row) line(card, '本机估算 ' + cost(row.estimate, wallet.currency) + ' · ' + row.estimate.tokens + ' tokens', 'sub')
-        const alertId = source + ':' + view.scope + ':' + wallet.currency
-        if (low && !alerts.has(alertId)) {alerts.add(alertId); lowMessages.push((source === 'account' ? '账号登录' : 'API Key') + ' 余额偏低：' + money(wallet.total,wallet.currency))}
-        if (!low) alerts.delete(alertId)
-      }
-      if (view.message && view.status === 'ready') line(card,view.message,'sub')
-      if (view.updatedAt) line(card,'更新于 ' + new Date(view.updatedAt).toLocaleTimeString(),'sub')
-      cards.append(card)
+  const panelStyle=el('style');panelStyle.textContent=UI_CSS+BUBBLE_CSS+`
+  .toast{position:fixed;left:18px;bottom:18px;width:min(380px,90vw);pointer-events:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;box-shadow:0 8px 25px #07133744}.toast button{float:right}`
+  shadow.append(style);panels.append(panelStyle);const renderer=new BubbleRenderer(false),figure=button('',()=>{}),image=el('img'),menuButton=button('☰',showMenu)
+  figure.className='figure';figure.setAttribute('aria-label','DeepSeek 角色：按压、拖动；右键打开菜单');image.alt='DeepSeek Whale Lite 角色';image.draggable=false;figure.append(image);menuButton.className='menu-toggle';menuButton.setAttribute('aria-label','DeepSeek 挂件菜单');renderer.element.setAttribute('aria-live','polite');shadow.append(renderer.element,figure,menuButton)
+  document.body.append(host,portal)
+  let stopped=false,settings:Settings=structuredClone(DEFAULT_SETTINGS),snapshot:UiSnapshot,rows:HistoryRow[]=[],catalog:Catalog={assets:[],groups:[]},bubbles:BubbleConfig,cursor=0,initialized=false,poll:ReturnType<typeof setTimeout>|undefined,ttl:ReturnType<typeof setTimeout>|undefined,menu:HTMLElement|null=null,toast:HTMLElement|null=null,toastRenderer:BubbleRenderer|null=null
+  let manual:BubbleDefinition|null=null,manualScene=0,lastNotice='',drag:{id:number;x:number;y:number;startX:number;startY:number;moved:boolean}|null=null,viewport={width:innerWidth,height:innerHeight}
+  const queue=new ClickQueue(),notifications=new NotificationQueue(),audio=new Set<HTMLAudioElement>(),played=new Set<string>()
+  const context=():RenderContext=>({snapshot,rows,catalog,notification:notifications.current??undefined})
+  async function api<T>(path:string,body?:unknown,method=body===undefined?'GET':'PUT'):Promise<T>{const response=await fetch(PREFIX+path,{method,signal:lifecycle.signal,headers:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});if(response.status===404&&path==='/state'){cleanup();throw new Error('插件已禁用')}const data=await response.json() as T&{error?:string};if(!response.ok)throw new Error(data.error??'请求失败');return data}
+  const client:Client={api,context,reload,previewAudio:(id,volume)=>play(id,volume??settings.volume)}
+  function cleanup(){if(stopped)return;stopped=true;lifecycle.abort();if(poll)clearTimeout(poll);if(ttl)clearTimeout(ttl);renderer.close();toastRenderer?.close();for(const a of audio){a.pause();a.removeAttribute('src');a.load()}audio.clear();for(const close of panels.querySelectorAll<HTMLButtonElement>('.dialog-heading button'))close.click();host.remove();portal.remove();delete window.__deepseekWhaleLite}
+  window.__deepseekWhaleLite=cleanup
+  function play(id:string,volume:number,release=false){const group=catalog.groups.find(g=>g.id===id);if(group)id=release?group.release:group.press;const asset=catalog.assets.find(a=>a.id===id&&a.kind==='audio');if(!asset)return;const a=new Audio(asset.url);a.volume=Math.max(0,Math.min(1,volume));audio.add(a);const done=()=>audio.delete(a);a.onended=a.onerror=done;void a.play().catch(done)}
+  function position(x=settings.x,y=settings.y){const size=300*settings.scale,top=44,maxX=Math.max(0,innerWidth-size-settings.scrollGap-8),maxY=Math.max(top,innerHeight-size-8);host.style.transform='scale('+settings.scale+')';host.style.left=Math.max(0,Math.min(x??maxX,maxX))+'px';host.style.top=Math.max(top,Math.min(y??maxY,maxY))+'px';host.classList.toggle('left',settings.flip||(settings.autoFlip&&Number.parseFloat(host.style.left)<Math.max(20,innerWidth*.15)));menuButton.hidden=settings.menuButtonHide}
+  function draw(){if(!snapshot||!bubbles)return;if(!drag)position();const asset=catalog.assets.find(a=>a.id===settings.character&&a.kind==='role');if(asset&&image.getAttribute('src')!==asset.url){figure.style.clipPath='';image.hidden=false;image.src=asset.url}const n=notifications.current,cfg=n?settings.events[n.kind]:null
+    if(lastNotice&&!n){manual=null;queue.index=-1}
+    const def=n&&cfg?.enabled?cfg.content:manual??(settings.stickyBalance?bubbles.steps[0].options[0].bubble:null),visible=settings.bubbleOn&&!!def&&(!n||!!cfg?.bubble)
+    renderer.element.classList.toggle('open',visible)
+    if(def)renderer.render(def,context(),n?.id??(manual?'manual:'+manualScene:'balance'))
+    const notice=n?.id??''
+    if(lastNotice!==notice){lastNotice=notice;if(ttl)clearTimeout(ttl);toast?.remove();toast=null;toastRenderer?.close();toastRenderer=null
+      if(n&&cfg?.enabled){if(!played.has(n.id)){played.add(n.id);if(played.size>20000)played.delete(played.values().next().value!);if(settings.sound&&cfg.sound)play(cfg.audio,cfg.volume??settings.volume)}if(cfg.closeSeconds>0)ttl=setTimeout(advance,cfg.closeSeconds*1000)}
     }
-    if (lowMessages.length) {say(lowMessages.join('\n')); sound('alert')}
-    renderExtras(forceExtras); place()
+    if(n&&cfg?.enabled&&!visible&&!toast){toast=el('div','','toast');toast.setAttribute('role','status');toast.append(button('关闭',advance),el('strong',EVENT_LABELS[n.kind]));const preview=el('div','','preview');toastRenderer=new BubbleRenderer();preview.append(toastRenderer.element);toast.append(preview);panels.append(toast)}
+    if(toastRenderer&&n&&cfg)toastRenderer.render(cfg.content,context(),n.id)
+    if((!n||visible)&&toast){toast.remove();toast=null;toastRenderer?.close();toastRenderer=null}
   }
-  function line(parent: HTMLElement, text: string, className = '') {const d = document.createElement('div'); d.className = className; d.textContent = text; parent.append(d)}
-  function renderExtras(force = true) {
-    // Polling must not remove a focused input or close an open role picker.
-    if (!force && settingsOpen && extras.querySelector('.form')) return
-    extras.replaceChildren()
-    if (settingsOpen) {
-      const form = document.createElement('div'); form.className = 'form'
-      function field(label: string, input: HTMLElement) {const l = document.createElement('label'); l.append(document.createTextNode(label),input); form.append(l)}
-      const chars = document.createElement('select'); for (const c of CHARACTERS) chars.add(new Option(c.name,c.id)); chars.value = settings.character
-      chars.onchange = () => {void update({character: chars.value})}; field('内置角色',chars)
-      const flip = document.createElement('input'); flip.type = 'checkbox'; flip.checked = settings.flip; flip.onchange = () => {void update({flip:flip.checked})}; field('镜像角色',flip)
-      for (const [key,label,min,max,step] of [['scale','大小',0.6,1.5,0.1], ['volume','音量',0,1,0.1], ['refreshSeconds','刷新间隔（秒）',15,600,15]] as const) {
-        const input = document.createElement('input'); input.type = 'number'; input.min = String(min); input.max = String(max); input.step = String(step); input.value = String(settings[key])
-        input.onchange = () => {void update({[key]: Number(input.value)})}; field(label,input)
-      }
-      const enabled = document.createElement('input'); enabled.type = 'checkbox'; enabled.checked = settings.sound; enabled.onchange = () => {void update({sound: enabled.checked}).then(() => sound('complete'))}; field('启用音效',enabled)
-      for (const currency of ['CNY','USD'] as const) {
-        const threshold = document.createElement('input'); threshold.type = 'number'; threshold.min = '0'; threshold.step = '0.1'; threshold.value = String(settings.lowBalance[currency])
-        threshold.onchange = () => {void update({lowBalance:{...settings.lowBalance,[currency]:Number(threshold.value)}})}; field(currency + ' 低余额阈值',threshold)
-      }
-      form.append(button('试听完成音', () => sound('complete')),button('重置位置', () => {void update({x:null,y:null})})); extras.append(form)
-    }
-    if (historyOpen) {
-      const history = document.createElement('div'); history.className = 'history'
-      for (const row of rows.slice(0,90)) {
-        const item = document.createElement('article')
-        line(item,row.day + ' · ' + (row.source === 'account' ? '账号登录' : 'API Key') + ' · ' + row.currency)
-        line(item,'账本 ' + row.scope.slice(0,8) + (row.observed ? ' · 观测下降 ' + money(row.debit,row.currency,4) : ' · 无余额观测'),'sub')
-        line(item,'本机估算 ' + cost(row.estimate,row.currency),'sub')
-        if (row.observed) line(item,'观测从 ' + new Date(row.firstAt).toLocaleTimeString() + ' 开始；余额增加 ' + money(row.credit,row.currency),'sub'); history.append(item)
-      }
-      if (!rows.length) line(history,'尚无历史记录','sub')
-      extras.append(history)
-    }
-    if (settingsOpen || historyOpen) line(extras,'北京时间日界；观测仅覆盖插件运行期间。费用为峰谷费率区间，并非账单。','note')
-    place()
+  function advance(){const current=notifications.current;if(current){void api('/notifications',{id:current.id}).catch(()=>{});notifications.next()}else{manual=queue.next(bubbles);manualScene++}draw()}
+  renderer.element.onclick=e=>{if(!(e.target instanceof HTMLAnchorElement))advance()}
+  renderer.element.oncontextmenu=e=>{e.preventDefault();showMenu()}
+  async function reload(){const [state,history,resources,config]=await Promise.all([api<UiSnapshot>('/state'),api<{rows:HistoryRow[]}>('/history'),api<Catalog>('/resources'),api<BubbleConfig>('/bubbles')]);if(stopped)return;snapshot=state;settings=state.settings;rows=history.rows;catalog=resources;bubbles=config;draw()}
+  function action(work:()=>Promise<unknown>){void work().catch(error=>{if(stopped)return;const d=dialog(panels,'操作未完成');d.body.append(el('p',error instanceof Error?error.message:'请稍后重试'))})}
+  function showMenu(){if(!snapshot)return;menu?.remove();menu=el('div','','menu');menu.setAttribute('aria-label','DeepSeek 挂件菜单');const choices=select([['account','仅登录账号'],['api-key','仅 API Key'],['both','两者同时']],settings.displayMode??'api-key');choices.onchange=()=>action(async()=>{await api('/settings',{displayMode:choices.value});await reload()});menu.append(field('余额显示',choices))
+    const close=()=>{menu?.remove();menu=null},run=(work:()=>void)=>()=>{close();work()}
+    menu.append(button('余额与来源详情',run(details)),button('分别刷新两个来源',run(()=>action(async()=>{await Promise.all(SOURCES.map(s=>api('/balance?source='+s)));await reload()}))),button('气泡与模块编辑',run(()=>action(()=>openBubbleEditor(panels,client)))),button('余额账本与校正',run(()=>action(()=>openLedger(panels,client)))),button('角色、图片与音效素材',run(()=>action(()=>openAssets(panels,client)))),button('外观、气泡与提醒设置',run(()=>openSettings(panels,client))),button('关闭菜单',close));panels.append(menu);const r=figure.getBoundingClientRect(),width=235,height=menu.getBoundingClientRect().height;menu.style.left=Math.max(8,Math.min(r.left-width-5,innerWidth-width-8))+'px';menu.style.top=Math.max(44,Math.min(r.top,innerHeight-height-8))+'px';menu.querySelector('button')?.focus()}
+  function details(){const d=dialog(panels,'两种官方来源 · 分别记账');for(const source of SOURCES){const card=el('div','','section'),v=snapshot.balances[source];card.append(el('strong',sourceName(source)),el('p',v.label),el('p',v.message||'余额可用'),el('p',v.updatedAt?'更新于 '+new Date(v.updatedAt).toLocaleString():'尚未成功刷新','muted'),button('刷新此来源',()=>{void report(d,async()=>{await api<BalanceView>('/balance?source='+source);await reload();d.close();details()})}));for(const w of v.wallets){card.append(el('p',money(w.total,w.currency,4)+' '+w.currency+' · 充值 '+money(w.recharge,w.currency,4)+' · 赠金 '+money(w.bonus,w.currency,4)));const row=rows.find(r=>r.source===source&&r.scope===v.scope&&r.currency===w.currency&&r.observed);if(row)card.append(button(w.currency+' 账本提醒',()=>bookPreferences(panels,client,row)))}d.body.append(card)}d.footer.append(button('关闭',d.close))}
+  figure.oncontextmenu=e=>{e.preventDefault();showMenu()}
+  figure.onpointerdown=e=>{if(e.button!==0)return;const r=host.getBoundingClientRect();drag={id:e.pointerId,x:r.left,y:r.top,startX:e.clientX,startY:e.clientY,moved:false};figure.setPointerCapture(e.pointerId);figure.classList.add('pressed');if(settings.sound)play(settings.pressGroup,settings.volume)}
+  figure.onpointermove=e=>{if(!drag||drag.id!==e.pointerId)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.abs(dx)+Math.abs(dy)>5)drag.moved=true;if(drag.moved)position(drag.x+dx,drag.y+dy)}
+  function finishDrag(cancelled=false){if(!drag)return;const moved=drag.moved;drag=null;figure.classList.remove('pressed');if(!cancelled&&settings.sound)play(settings.pressGroup,settings.volume,true)
+    if(moved){const r=host.getBoundingClientRect(),snap=settings.snap,px=(side:'top'|'right'|'bottom'|'left')=>snap[side]*(snap.unit==='px'?1:(side==='top'||side==='bottom'?innerHeight:innerWidth)/100);let x=r.x,y=r.y;if(snap.enabled){if(x<px('left'))x=0;else if(innerWidth-settings.scrollGap-r.right<px('right'))x=innerWidth-settings.scrollGap-r.width-8;if(y-44<px('top'))y=44;else if(innerHeight-r.bottom<px('bottom'))y=innerHeight-r.height-8}position(x,y);action(async()=>{await api('/settings',{x:Number.parseFloat(host.style.left),y:Number.parseFloat(host.style.top)});await reload()})}
+    else if(!cancelled){if(settings.tapAdvance)advance();else{manual=queue.start(bubbles);manualScene++;draw()}}
   }
-  function place(x = settings.x, y = settings.y) {
-    host.style.setProperty('--panel-height', Math.max(80,innerHeight/settings.scale - 172) + 'px')
-    const rect = host.getBoundingClientRect()
-    const maxX = Math.max(0,innerWidth - rect.width - 8); const maxY = Math.max(0,innerHeight - rect.height - 8)
-    host.style.left = Math.max(0,Math.min(x ?? maxX,maxX)) + 'px'; host.style.top = Math.max(0,Math.min(y ?? maxY,maxY)) + 'px'
-  }
-  async function update(patch: Partial<Settings>): Promise<void> {
-    try {settings = await api<Settings>('/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)}); render(true)}
-    catch {say('设置保存失败，请检查输入')}
-  }
-  async function refresh(source: Source): Promise<void> {
-    try {snapshot.balances[source] = await api<BalanceView>('/balance?source=' + source); rows = (await api<{rows:Row[]}>('/history')).rows; render()}
-    catch {say((source === 'account' ? '账号登录' : 'API Key') + '刷新失败，稍后重试')}
-  }
-  function completion(item: Completion): string {
-    const lines = [item.reason === 'completed' ? '这一轮完成啦！' : '这一轮已结束（中断或失败）']
-    for (const source of SOURCES) {
-      const calls = item.calls.filter(c => c.source === source); if (!calls.length) continue
-      // Display each account scope separately even within a mixed-source turn.
-      for (const scope of new Set(calls.map(c => c.scope))) {
-        const own = calls.filter(c => c.scope === scope)
-        const view = snapshot.balances[source]; const currency = view.scope === scope ? view.wallets[0]?.currency ?? 'CNY' : 'CNY'
-        const sum = totals(own,currency)
-        lines.push((source === 'account' ? '账号登录' : 'API Key') + ' [' + scope.slice(0,6) + '] ' + sum.tokens + ' tokens\n估算 ' + cost(sum,currency))
-      }
-    }
-    return lines.join('\n')
-  }
-  let drag: {id:number; startX:number; startY:number; x:number; y:number; moved:boolean} | null = null
-  function down(e: PointerEvent) {
-    if (e.button !== 0 || (e.target instanceof Element && e.target.closest('button,input,select') && !figure.contains(e.target))) return
-    const r = host.getBoundingClientRect(); drag = {id:e.pointerId,startX:e.clientX,startY:e.clientY,x:r.x,y:r.y,moved:false};
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); figure.classList.add('pressed'); sound('press')
-  }
-  function move(e: PointerEvent) {
-    if (!drag || drag.id !== e.pointerId) return
-    const dx=e.clientX-drag.startX, dy=e.clientY-drag.startY
-    if (Math.abs(dx)+Math.abs(dy)>5) drag.moved=true
-    if (drag.moved) place(drag.x+dx,drag.y+dy)
-  }
-  function up(e: PointerEvent) {
-    if (!drag || drag.id!==e.pointerId) return
-    const moved=drag.moved; drag=null; figure.classList.remove('pressed'); sound('release')
-    if (moved) {
-      const r=host.getBoundingClientRect(); let x=r.x,y=r.y
-      if(x<35)x=8; if(innerWidth-r.right<35)x=innerWidth-r.width-8
-      if(y<35)y=8; if(innerHeight-r.bottom<35)y=innerHeight-r.height-8
-      void update({x:Math.max(0,x),y:Math.max(0,y)})
-    } else if(figure.contains(e.target as Node)) say(last?completion(last):'你好呀！我会分别看好两个账户的余额。')
-  }
-  for(const target of [title,figure] as HTMLElement[]) {
-    target.addEventListener('pointerdown',down,{signal:lifecycle.signal}); target.addEventListener('pointermove',move,{signal:lifecycle.signal}); target.addEventListener('pointerup',up,{signal:lifecycle.signal})
-    target.addEventListener('pointercancel',()=>{drag=null;figure.classList.remove('pressed')},{signal:lifecycle.signal})
-  }
-  figure.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();say(last?completion(last):'两个来源，分别记账。')}},{signal:lifecycle.signal})
-  window.addEventListener('resize',()=>place(),{signal:lifecycle.signal})
-  window.addEventListener('pagehide',cleanup,{signal:lifecycle.signal})
-  async function tick() {
-    try {
-      snapshot = await api<Snapshot>('/state'); settings = snapshot.settings
-      const history = await api<{rows:Row[]}>('/history'); rows = history.rows
-      if (!initialized) {cursor=snapshot.completionSeq; initialized=true}
-      const completions = await api<{seq:number;items:Completion[]}>('/completions?after=' + cursor)
-      if (completions.items.length) {
-        last = completions.items.at(-1) ?? null
-        say(completions.items.map(completion).join('\n\n'))
-        if (completions.items.some(item => item.reason === 'completed')) sound('complete')
-      }
-      cursor=completions.seq; render()
-    } catch {if (!stopped) say('暂时无法连接 DSH；稍后自动重试')}
-    if (!stopped) poll=setTimeout(tick,3000)
-  }
+  figure.onpointerup=e=>{if(drag?.id===e.pointerId)finishDrag()}
+  figure.onpointercancel=figure.onlostpointercapture=()=>finishDrag(true)
+  window.addEventListener('pointerup',e=>{if(drag?.id===e.pointerId)finishDrag()},{signal:lifecycle.signal})
+  window.addEventListener('blur',()=>finishDrag(true),{signal:lifecycle.signal})
+  figure.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();if(settings.tapAdvance)advance();else{manual=queue.start(bubbles);manualScene++;draw()}}}
+  // The alpha outline keeps the large transparent PNG margins click-through.
+  image.onload=()=>{try{const c=el('canvas');c.width=c.height=64;const ctx=c.getContext('2d')!;ctx.drawImage(image,0,0,64,64);const data=ctx.getImageData(0,0,64,64).data,points:[number,number][]=[];for(let y=0;y<64;y++){let min=64,max=-1;for(let x=0;x<64;x++)if(data[(y*64+x)*4+3]>32){min=Math.min(min,x);max=x}if(max>=0){points.push([min,y],[max+1,y+1])}}points.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const cross=(a:number[],b:number[],p:number[])=>(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]),half=(ps:[number,number][])=>{const h:[number,number][]=[];for(const p of ps){while(h.length>1&&cross(h.at(-2)!,h.at(-1)!,p)<=0)h.pop();h.push(p)}return h.slice(0,-1)},hull=[...half(points),...half([...points].reverse())];if(hull.length>2)figure.style.clipPath='polygon('+hull.map(([x,y])=>x/64*100+'% '+y/64*100+'%').join(',')+')'}catch{/* Asset failure must not block the host. */}}
+  image.onerror=()=>{figure.style.clipPath='';image.hidden=true;figure.setAttribute('aria-label','角色素材暂不可用；右键打开菜单')}
+  window.addEventListener('resize',()=>{if(!initialized||drag){viewport={width:innerWidth,height:innerHeight};return}const r=host.getBoundingClientRect(),right=viewport.width-r.right,bottom=viewport.height-r.bottom,x=r.x<right?r.x:innerWidth-r.width-right,y=r.y<bottom?r.y:innerHeight-r.height-bottom;viewport={width:innerWidth,height:innerHeight};settings.x=Math.max(0,x);settings.y=Math.max(44,y);position();action(async()=>{await api('/settings',{x:Number.parseFloat(host.style.left),y:Number.parseFloat(host.style.top)})})},{signal:lifecycle.signal})
+  window.addEventListener('pagehide',cleanup,{signal:lifecycle.signal});document.addEventListener('pointerdown',e=>{if(menu&&e.composedPath().every(n=>n!==portal&&n!==host)){menu.remove();menu=null}},{signal:lifecycle.signal})
+  async function tick(){try{if(!initialized){await reload();const initial=await api<{seq:number;pending:Notification[]}>('/notifications');cursor=initial.seq;for(const n of initial.pending)if(settings.events[n.kind].enabled)notifications.push(n);initialized=true}else{const [state,h,n,cfg]=await Promise.all([api<UiSnapshot>('/state'),api<{rows:HistoryRow[]}>('/history'),api<{seq:number;items:Notification[];pending:Notification[]}>('/notifications?after='+cursor),api<BubbleConfig>('/bubbles')]);snapshot=state;settings=state.settings;rows=h.rows;if(cfg.revision!==bubbles.revision){bubbles=cfg;manual=null;queue.index=-1}notifications.resolved(new Set(n.pending.map(p=>p.id)));for(const item of n.items)if(settings.events[item.kind].enabled&&(!['question','approval'].includes(item.kind)||item.pending))notifications.push(item);cursor=n.seq;while(notifications.current&&!settings.events[notifications.current.kind].enabled)notifications.next()}draw()}catch{if(!stopped&&!initialized){renderer.render(definition('暂时无法连接 DSH\n稍后自动重试'),{snapshot:{settings,balances:{account:{} as BalanceView,'api-key':{} as BalanceView},completionSeq:0,title:'',pricing:{status:'unknown',nextAt:null,calendarYear:2026,holidays:[]}},rows:[],catalog},'error')}}if(!stopped)poll=setTimeout(()=>void tick(),2000)}
   await tick()
 }
 void mount()

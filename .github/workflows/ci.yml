@@ -2,7 +2,7 @@ name: Check and pack
 on:
   pull_request:
   push:
-    branches: [main, feat/deepseek-desktop-lite]
+    branches: [main, feat/deepseek-desktop-lite, feat/deepseek-upstream-parity]
   workflow_dispatch:
 permissions:
   contents: read

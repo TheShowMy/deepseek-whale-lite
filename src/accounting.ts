@@ -1,5 +1,5 @@
 import type {CallRecord, Currency, Source, State, Usage, CostRange} from './shared.ts'
-import {DEFAULT_SETTINGS} from './shared.ts'
+import {DEFAULT_SETTINGS, emptyV2Fields} from './shared.ts'
 export const SCALE = 100000000
 export const PRICE_DATE = '2026-10-10'
 export const PRICE_URL = 'https://api-docs.deepseek.com/quick_start/pricing/'
@@ -19,7 +19,7 @@ export function units(value: string | number): number {
 }
 export function dayKey(at = Date.now()): string { return new Date(at + 8 * 3600000).toISOString().slice(0, 10) }
 export function emptyState(): State {
-  return {version: 1, settings: structuredClone(DEFAULT_SETTINGS), books: {}, calls: [], completions: [], completionSeq: 0, seen: {}, turnScopes: {}}
+  return {version: 2, settings: structuredClone(DEFAULT_SETTINGS), books: {}, calls: [], completions: [], completionSeq: 0, seen: {}, turnScopes: {}, ...emptyV2Fields()}
 }
 export function bookKey(source: Source, scope: string, currency: Currency): string { return [source, scope, currency].join(':') }
 export function observe(state: State, source: Source, scope: string, currency: Currency, total: number, at: number): void {
@@ -69,7 +69,7 @@ export function totals(calls: CallRecord[], currency: Currency) {
 export function history(state: State, source?: Source, scope?: string) {
   const records = Object.values(state.books).filter(b => (!source || b.source === source) && (!scope || b.scope === scope)).flatMap(b =>
     Object.values(b.days).map(row => ({...row, source: b.source, scope: b.scope, currency: b.currency, observed: true,
-      estimate: totals([], b.currency),
+      amount: correctedAmount(row), needsReview:row.credit>(row.correction?.credit??0), revision:revision(b.source,b.scope,b.currency,row),estimate: totals([], b.currency),
     })))
   const key = (s: Source, id: string, c: Currency, day: string) => bookKey(s,id,c) + ':' + day
   const index = new Map(records.map(r => [key(r.source,r.scope,r.currency,r.day),r]))
@@ -79,7 +79,7 @@ export function history(state: State, source?: Source, scope?: string) {
       const day = dayKey(call.at); const id = key(call.source,call.scope,currency,day)
       let row = index.get(id)
       if (!row) {
-        row = {day, source:call.source, scope:call.scope, currency, observed:false, firstAt:call.at, lastAt:call.at, opening:0, last:0, debit:0, credit:0, estimate:totals([],currency)}
+        row = {day, source:call.source, scope:call.scope, currency, observed:false, firstAt:call.at, lastAt:call.at, opening:0, last:0, debit:0, credit:0, amount:0,needsReview:false,revision:'',estimate:totals([],currency)}
         index.set(id,row); records.push(row)
       }
       const sum = totals([call],currency)
@@ -89,13 +89,25 @@ export function history(state: State, source?: Source, scope?: string) {
   return records.sort((a,b) => b.day.localeCompare(a.day) || b.lastAt - a.lastAt)
 }
 export function prune(state: State, now = Date.now()): void {
-  const cut = now - 30 * 86400000
-  state.calls = state.calls.filter(c => c.at >= cut).slice(-20000)
+  const cut = now - 90 * 86400000
   state.completions = state.completions.filter(c => c.at >= cut).slice(-200)
   state.seen = Object.fromEntries(Object.entries(state.seen).slice(-20000))
   state.turnScopes = Object.fromEntries(Object.entries(state.turnScopes).slice(-1000))
-  for (const [key, book] of Object.entries(state.books)) {
-    for (const [day, row] of Object.entries(book.days)) if (row.lastAt < cut) delete book.days[day]
-    if (!Object.keys(book.days).length) delete state.books[key]
-  }
+  state.notifications=state.notifications.filter(n=>n.pending||n.at>=now-7*86400000).slice(-1000)
+  state.dismissed=state.dismissed.slice(-20000)
+}
+export function correctedAmount(row:import('./shared.ts').DayRow):number {return row.correction?row.correction.amount+row.debit-row.correction.debit:row.debit}
+export function revision(source:Source,scope:string,currency:Currency,row:import('./shared.ts').DayRow):string {return [source,scope,currency,row.day,row.firstAt,row.last,row.debit,row.credit,row.revision??0].join(':')}
+export function reconcile(state:State,input:{source:Source;scope:string;currency:Currency;day:string;revision:string;credits:string;otherDebits:string;confirmed:boolean;reset?:boolean},now=Date.now()) {
+  const row=state.books[bookKey(input.source,input.scope,input.currency)]?.days[input.day]
+  if(!row)throw new Error('这一天没有余额观测记录')
+  if(input.revision!==revision(input.source,input.scope,input.currency,row))throw Object.assign(new Error('余额已更新，请重新核对'),{status:409})
+  const amount=(v:string)=>{if(!/^(0|[1-9]\d*)(\.\d{1,8})?$/.test(v))throw new Error('金额须为非负数，最多 8 位小数');return units(v)}
+  if(!input.reset&&!input.confirmed)throw new Error('请确认已核对全部余额调整')
+  const credits=input.reset?0:amount(input.credits),otherDebits=input.reset?0:amount(input.otherDebits)
+  const corrected=row.opening+credits-otherDebits-row.last
+  if(!input.reset&&(!Number.isSafeInteger(corrected)||corrected<0))throw new Error('校正消费为负或超出范围')
+  const previous=row.correction??null,next=input.reset?null:{at:now,credits,otherDebits,amount:corrected,debit:row.debit,credit:row.credit}
+  row.correctionLog=[...(row.correctionLog??[]),{at:now,previous,next}].slice(-50);row.correction=next;row.revision=(row.revision??0)+1
+  return history(state,input.source,input.scope).find(r=>r.currency===input.currency&&r.day===input.day)
 }

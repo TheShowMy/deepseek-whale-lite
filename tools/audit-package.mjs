@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 const result=spawnSync('npm',['pack','--dry-run','--json'],{encoding:'utf8'})
 assert.equal(result.status,0,result.stderr)
 const pack=JSON.parse(result.stdout)[0], files=pack.files.map(f=>f.path)
-for(const file of ['lib/index.js','lib/widget.js','cordis.patch.yml','README.md','PROVENANCE.md','LICENSE','docs/QA.md','docs/CHARACTERS.md','docs/image-prompts.json','docs/asset-manifest.json','assets/sounds/LICENSE-Kenney.txt'])assert.ok(files.includes(file),file)
+for(const file of ['lib/index.js','lib/widget.js','cordis.patch.yml','README.md','PROVENANCE.md','LICENSE','docs/QA.md','docs/UPSTREAM-PARITY.md','docs/CHARACTERS.md','docs/image-prompts.json','docs/asset-manifest.json','assets/sounds/LICENSE-Kenney.txt'])assert.ok(files.includes(file),file)
 const roles=['deepseek-smile','deepseek-focus','deepseek-sleepy','lumine','vesna','vodyanitsa','tsaritsa']
 for(const role of roles)assert.ok(files.includes('assets/characters/'+role+'.png'),role)
 for(const sound of ['press','release','complete','alert'])assert.ok(files.includes('assets/sounds/'+sound+'.ogg'),sound)
@@ -14,7 +14,7 @@ for(const file of files){
   if(/\.(js|json|md|yml)$/.test(file))assert.ok(!/\/Users\/|\/Volumes\/|dsh-whale-widget|\/dsh-whale\//.test(readFileSync(file,'utf8'))||file==='README.md'||file==='PROVENANCE.md',file)
 }
 const manifest=JSON.parse(readFileSync('package.json','utf8'))
-assert.equal(manifest.name,'dsh-deepseek-whale-lite');assert.equal(manifest.version,'0.1.0')
+assert.equal(manifest.name,'dsh-deepseek-whale-lite');assert.equal(manifest.version,'0.2.0')
 assert.ok(!manifest.scripts.postinstall);assert.ok(!manifest.scripts.prepare)
 const assets=JSON.parse(readFileSync('docs/asset-manifest.json','utf8'))
 for(const asset of assets.assets){

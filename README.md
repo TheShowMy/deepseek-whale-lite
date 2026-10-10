@@ -1,6 +1,10 @@
 # DeepSeek Whale Lite
 
-官方 DeepSeek Harness（DSH）**桌面端**的轻量余额挂件。TypeScript 实现，分别查看登录账号和 API Key 的余额；两者可以属于不同账户。
+官方 DeepSeek Harness（DSH）**桌面端**的 DeepSeek 思考气泡挂件。TypeScript 实现，分别查看登录账号和 API Key 的余额；两者可以属于不同账户。0.2.0 恢复上游气泡、点击队列、模块编辑、提醒、账本和本机素材管理。
+
+![上游 SVG 与 Lite 在实际桌面端的并排对照](docs/screenshots/desktop-upstream-comparison.png)
+
+两侧使用相同的新角色，金额为模拟数据。SVG 对照上游 MIT 源码，截图不包含上游未授权媒体。见 [功能对照表](docs/UPSTREAM-PARITY.md)。
 
 ## 安装
 
@@ -16,7 +20,7 @@ dsh-deepseek-whale-lite
 {"action":"install_bundle","target":"dsh-deepseek-whale-lite"}
 ```
 
-**0.1.0 当前尚未发布到 npm。** 发布前，在同一入口填写本机 `.tgz` 的绝对路径进行安装。桌面端管理自己的 `desktop` profile，不使用 CLI 的 `dsh plugin --profile desktop` 命令。安装、禁用或重新启用后请重启桌面端，以更新启动时收集的页面注入。
+**0.2.0 当前尚未发布到 npm。** 发布前，在同一入口填写 `dsh-deepseek-whale-lite-0.2.0.tgz` 的本机绝对路径，安装后启用并重启。桌面端管理自己的 `desktop` profile，不使用 CLI 的 `dsh plugin --profile desktop` 命令。重新启用后也请重启，以更新启动时收集的页面注入。
 
 参考：[官方插件管理说明](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/boot/plugin-manager)。
 
@@ -26,18 +30,21 @@ dsh-deepseek-whale-lite
 
 - **账号登录**：`deepseek-account`，使用 DSH 账号服务。显示账号名称、充值余额及赠送余额，支持只有赠金的钱包。
 - **API Key**：`deepseek-official`，沿用官方模型提供方的 `apiKeyEnv` 凭据引用，默认 `DEEPSEEK_API_KEY`。不要求它属于当前登录账号。
-- 两行分别标记来源、币种、更新时间及错误状态。余额和账本不合并；一行失败不影响另一行，失败不显示为零。
-- 显示模式只控制面板，不修改 DSH 的模型选择，也不停止隐藏来源的统计。退出账号登录不影响已配置的 Key。
+- 常驻气泡按来源显示两行，多币种分别标明。账号名、Key 引用、更新时间和详细状态在“余额与来源详情”中查看。余额和账本不合并；一行失败不影响另一行，失败不显示为零。
+- 显示模式只控制气泡，不修改 DSH 的模型选择，也不停止隐藏来源的统计。退出账号登录不影响已配置的 Key。
 - Key 和账号 token 只在宿主处理，页面不接收原始凭据。模型调用仍由官方 DSH 提供方负责；本插件不代理对话、不管理登录或 Key。
 - 仅处理官方 `https://api.deepseek.com` 端点。通过同名提供方配置的第三方代理不纳入统计。
 
 参考：[官方两种鉴权路径](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/llm/llm-deepseek)。
 
-## 保留的功能
+## 气泡、提醒与账本
 
-自动／手动刷新、今日余额观测、最近 30 天简单历史、每轮 token 与费用区间、完成提示、各来源低余额提醒、拖动吸附、大小和镜像、位置保存、七位内置角色，以及音效开关／音量。
-
-点击角色查看最近一轮，拖动角色或标题移动；靠近边缘自动吸附。默认关闭音效，开启后可以试听。低余额阈值分别设置 CNY 和 USD。
+- **思考气泡**：大泡、两个小圆泡和角色逐级冒出；角色按压 Q 弹、余额滚动。点击角色开始队列，点击气泡推进；可设置点击角色也推进。常驻模式在队列或系统提示结束后回到余额；关闭常驻后末项收起。
+- **位置与菜单**：拖动角色，自由摆放或四边吸附，距离可用像素或百分比；贴左自动镜像，文字正向，缩放与位置经重启保存；窗口顶部及滚动条避让。悬停按钮或右键打开菜单，按钮可隐藏。
+- **气泡编辑**：首次与后续队列增删排序、加权 A/B、随机语句／图片不连续重复。文本、链接、图片／动图、随机图片、余额／充值／赠金、今日消费、峰谷、对话名、本轮费用、代码动效模块可拖动分行、合并及存入模块库。最多六行、每行六模块，图片独占一行且每气泡最多一张。字体、字号、粗斜体、下划线、颜色、渐变、底色可配置；预览共用实际渲染器，保存生效、取消还原。
+- **提醒**：完成、低余额、今日预算、等待提问、等待授权分别配置内容、开关、音效、音量及关闭时间。等待交互优先，其他提醒排队去重；新预算及提问／授权默认关闭。全局关闭气泡仍可使用菜单和通知卡片。
+- **账本**：今日、近七天、全部记录、模型占比、日期展开、模型搜索；来源、账户作用域、币种分别筛选，混合来源单轮费用分别列出。低余额、预算和校正绑定具体账本；数值模块可选择账号／Key／当前显示来源。
+- **本机素材**：角色与气泡图片导入、预览、自定义素材置顶删除、透明静态裁剪；GIF／APNG 保留动画。音频波形选段、试听、WAV 片段与按下／释放音效组。内置素材可裁剪为新素材；导入仅保存在本机。默认音效关闭，升级保留已有开关及音量。
 
 角色采用粗线条、平涂的 Q 版半身风格：DeepSeek 微笑／专注／困困、荧、薇斯纳、沃雅妮莎、冰之女皇。DeepSeek 外观依据用户提供的蓝发女仆参考重新生成。图片及音效的来源和许可见 [PROVENANCE.md](PROVENANCE.md)，生成提示词见 [docs/image-prompts.json](docs/image-prompts.json)。
 
@@ -53,7 +60,11 @@ dsh-deepseek-whale-lite
 
 参考：[人民币价格](https://api-docs.deepseek.com/zh-cn/quick_start/pricing/) / [美元价格](https://api-docs.deepseek.com/quick_start/pricing/)。
 
-数据保存在 `$DSH_HOME/deepseek-whale-lite/state.json`，使用独立插件 ID 和接口前缀，可与上游插件共存。不导入旧账本、不持久化原始凭据。保留最近 30 天、最多 20,000 次调用及 200 条完成记录；历史中的短账本标识用于区分不同账号／Key。
+宿主统一下发北京时间峰谷、倒计时和 2026 年节假日日历；未知年份的潜在峰价时段标为未知。DSH 消息时间不等于最终计费时刻，调用费用在记录生成时固定为区间，不随当前时段重算历史。[2026 年节假日安排](https://big5.www.gov.cn/gate/big5/www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm)。
+
+余额校正填写所选日期累计到账与非调用扣减，结果为 **期初余额＋累计到账－非调用扣减－期末余额**。保留原观测、校正记录可撤销；后续下降继续累加。当日提交先独立刷新对应来源，余额版本、账户或币种变化时返回冲突，需重新核对。无余额观测的日期只查看估算。
+
+数据位于 `$DSH_HOME/deepseek-whale-lite/`：`state.json`、`archive/YYYY-MM.json`、`resources/index.json` 和本机资源。独立插件 ID 与接口前缀允许与上游共存，不自动导入上游旧账本、不持久化凭据。0.1 → 0.2 首次迁移先备份原文件至 `state.json.v1.bak`，保留账本和外观设置。逐轮明细保留 90 天或最多两万条，逐日观测 365 天；先成功归档再移出主文件，全部记录可检索归档。
 
 ## 开发与验证
 
@@ -71,6 +82,6 @@ npm pack
 
 这是 [MeteorNOX/DeepSeek-Balance-Whale-Widget](https://github.com/MeteorNOX/DeepSeek-Balance-Whale-Widget) 的真实 fork。基于 **上游 `main` / `fce34e3abd1fe8b616e287b9864305c7f0be81a0` / 0.3.18**，保留 Git 历史及原作者 MIT 声明。沿用其桌面早期注入和独立余额观测思路，用 TypeScript 重写实现。
 
-本分支移除了多提供商、订阅额度、Codex、自定义素材上传裁剪及复杂气泡编辑。上游缺少再分发许可的 PNG、GIF、MP3、WAV 及相关引用已从本分支和发布包中移除；它们仍可能存在于 fork 的历史提交中。
+0.2.0 以本 fork 的 `aa3cd88` 为实现基线，恢复上述 DeepSeek 桌面功能；沿用上游 MIT SVG 轮廓、描边、配色及动画思路。继续移除其他提供商、代理、订阅额度和 Codex。缺少再分发许可的上游 PNG、GIF、MP3、WAV 及引用已从实现分支与发布包移除，仍可能存在于 fork 历史。拍头和金币效果用代码动画实现。
 
 代码按 [MIT](LICENSE) 分发。角色图片不适用代码的 MIT；原神角色是非官方、非商业同人内容，角色设计权利归原权利人。音效来自 Kenney CC0 素材，不使用游戏提取音频。本项目与 DeepSeek、HoYoverse 无隶属关系。
