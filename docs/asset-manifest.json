@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-10",
+  "assets": [
+    {
+      "path": "assets/characters/deepseek-focus.png",
+      "sha256": "da6eb69dcd273028826483c4cf30cb0f4de971af0718b8944ed72fed7741f007",
+      "bytes": 1412561
+    },
+    {
+      "path": "assets/characters/deepseek-sleepy.png",
+      "sha256": "4544c0504ccfa5fd7ac4738f8f68c0367e68ae494a12f21da324cb991bf6877f",
+      "bytes": 1503224
+    },
+    {
+      "path": "assets/characters/deepseek-smile.png",
+      "sha256": "b3979a77652afe7c6da03cc00252b70e765142aac24295b23ae7ed39cc77d0f1",
+      "bytes": 1401669
+    },
+    {
+      "path": "assets/characters/lumine.png",
+      "sha256": "d5c40656b399a08bfe1ec1f58288523c7f7a9f94d8c8bf936cf5881f1858e02f",
+      "bytes": 1355974
+    },
+    {
+      "path": "assets/characters/tsaritsa.png",
+      "sha256": "0d42e276acf0dcff300fd4fb9101ab19b4d9ff3577e107aa5585bd6d1f19a8b9",
+      "bytes": 1511761
+    },
+    {
+      "path": "assets/characters/vesna.png",
+      "sha256": "7e2246a722dfddc31fe30902a129da16b69b627cb4a45e098725633a1b9c124e",
+      "bytes": 1651547
+    },
+    {
+      "path": "assets/characters/vodyanitsa.png",
+      "sha256": "dcbdee6c2c04eaff9b3a7f3c9f58914c111961653fc7f96c783f7c401a6c24e6",
+      "bytes": 1563301
+    },
+    {
+      "path": "assets/sounds/LICENSE-Kenney.txt",
+      "sha256": "937121d19356937b5a68218fedc5166b93459957149f3b34319e7eac3f3bd4be",
+      "bytes": 458
+    },
+    {
+      "path": "assets/sounds/alert.ogg",
+      "sha256": "9851a69d0c613e13bceef08060ecc4148f098ef487927cbebe270d642398a3b3",
+      "bytes": 13615
+    },
+    {
+      "path": "assets/sounds/complete.ogg",
+      "sha256": "8a91f969e932df709df80ee124d86a51389eed9b67f22e5e716bc2bbf60d8dab",
+      "bytes": 25394
+    },
+    {
+      "path": "assets/sounds/press.ogg",
+      "sha256": "ddb93a3671233f95da0e0b10367f082f7eb42fa6caaddcf776410aa8833c747d",
+      "bytes": 16508
+    },
+    {
+      "path": "assets/sounds/release.ogg",
+      "sha256": "8a7451193c38bc05483aec25dd193e163a15d44cf7fff04ac7912573231b0201",
+      "bytes": 11787
+    }
+  ]
+}
