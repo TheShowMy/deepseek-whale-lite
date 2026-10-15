@@ -1,6 +1,6 @@
 # DeepSeek Whale Lite
 
-官方 DeepSeek Harness（DSH）**桌面端**的 DeepSeek 思考气泡挂件。TypeScript 实现，分别查看登录账号和 API Key 的余额；两者可以属于不同账户。0.3.0 增加可改色角色轮廓，并补齐约定的 DeepSeek 桌面编辑、图表、提醒与素材操作。实现及验证范围逐项记录，不代表上游所有提供商和平台的功能。
+官方 DeepSeek Harness（DSH）**桌面端**的 DeepSeek 思考气泡挂件。TypeScript 实现，分别查看登录账号和 API Key 的余额；两者可以属于不同账户。0.3.0 增加可改色角色轮廓，并补齐约定的 DeepSeek 桌面编辑、图表、提醒与素材操作。0.3.1 修复启用挂件后 DSH 窗口无法拖动的问题。实现及验证范围逐项记录，不代表上游所有提供商和平台的功能。
 
 ![上游 SVG 与 Lite 在实际桌面端的并排对照](docs/screenshots/desktop-upstream-comparison.png)
 
@@ -20,7 +20,7 @@ dsh-deepseek-whale-lite
 {"action":"install_bundle","target":"dsh-deepseek-whale-lite"}
 ```
 
-**0.3.0 当前尚未发布到 npm。** 发布前，在同一入口填写 `dsh-deepseek-whale-lite-0.3.0.tgz` 的本机绝对路径，安装后启用并重启。桌面端管理自己的 `desktop` profile，不使用 CLI 的 `dsh plugin --profile desktop` 命令。重新启用后也请重启，以更新启动时收集的页面注入。
+**0.3.1 当前尚未发布到 npm。** 发布前，在同一入口填写 `dsh-deepseek-whale-lite-0.3.1.tgz` 的本机绝对路径，安装后启用并重启。桌面端管理自己的 `desktop` profile，不使用 CLI 的 `dsh plugin --profile desktop` 命令。重新启用后也请重启，以更新启动时收集的页面注入。
 
 参考：[官方插件管理说明](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/boot/plugin-manager)。
 
@@ -78,7 +78,7 @@ npm pack
 
 `src/` 为源码；esbuild 生成宿主 `lib/index.js` 和前端 `lib/widget.js`。无运行时 npm 依赖，无安装编译脚本。修改源码后需重新构建，包里携带可直接加载的 JavaScript。
 
-首个验收目标为官方桌面端 **0.2.0-rc.2 / macOS arm64**。具体测试结果见 [0.3.0 验证记录](docs/QA-0.3.0.md)（[0.2 历史记录](docs/QA.md)）。Web 不在支持范围内；Windows / Linux 未实测；正式 npm 名称安装等待发布后验证。
+首个验收目标为官方桌面端 **0.2.0-rc.2 / macOS arm64**。窗口拖动修复见 [0.3.1 验证记录](docs/QA-0.3.1.md)，完整功能验证见 [0.3.0 验证记录](docs/QA-0.3.0.md)（[0.2 历史记录](docs/QA.md)）。Web 不在支持范围内；Windows / Linux 未实测；正式 npm 名称安装等待发布后验证。
 
 ## 上游与许可
 
